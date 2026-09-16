@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shopify Product Feed Health Check</title>
+  <meta name="description" content="Free Shopify product-data health check with prioritized, actionable repair guidance for common feed-readiness issues." />
+  <meta name="robots" content="index,follow" />
+  <meta name="referrer" content="no-referrer" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="collector.css" />
+</head>
+<body>
+  <header class="nav shell">
+    <a class="brand" href="#top" aria-label="Feed Health home">
+      <span class="brand-mark">FH</span>
+      <span>Feed Health</span>
+    </a>
+    <a class="nav-link" href="#privacy">Privacy & coverage</a>
+  </header>
+
+  <main id="top">
+    <section class="hero shell">
+      <div class="hero-copy">
+        <p class="eyebrow">FREE SHOPIFY PRODUCT FEED HEALTH CHECK</p>
+        <h1>Find feed issues. <span>Know exactly what to fix next.</span></h1>
+        <p class="lede">Check public Shopify product data and get a prioritized repair plan with affected products, channel impact, repair steps, and examples. No Shopify login. No app install. No payment.</p>
+        <div class="trust-row" aria-label="Safety guarantees">
+          <span>✓ Public storefront data only</span><span>✓ Actionable repair guidance</span><span>✓ No store changes</span><span>✓ Free health check</span>
+        </div>
+      </div>
+
+      <aside class="hero-card" aria-label="What the check reviews">
+        <p class="card-kicker">What you get</p>
+        <div class="metric-grid">
+          <div><strong>8</strong><span>scored feed signals</span></div>
+          <div><strong>50</strong><span>products max per scan</span></div>
+          <div><strong>3</strong><span>repair priorities</span></div>
+        </div>
+        <p class="micro">This check identifies product-data quality risks and recommends repairs. It does not change your Shopify store or guarantee channel approval, ranking, impressions, clicks, or sales.</p>
+      </aside>
+    </section>
+
+    <section class="checker shell" aria-labelledby="checker-title">
+      <div class="section-heading">
+        <p class="eyebrow">STEP 01</p>
+        <h2 id="checker-title">Check a public Shopify storefront</h2>
+        <p>Enter a storefront URL. We make one browser request to the store’s public product endpoint. No admin access, app installation, retry loop, proxy fallback, or hidden data access.</p>
+      </div>
+
+      <form id="store-form" class="scan-form" novalidate>
+        <label for="store-url">Storefront URL</label>
+        <div class="input-row">
+          <input id="store-url" name="storefront" type="url" inputmode="url" autocomplete="url" placeholder="https://example-store.com" required />
+          <button id="scan-button" class="button primary" type="submit">Run free check</button>
+        </div>
+        <div class="field-row">
+          <label for="target-channel">Primary channel</label>
+          <select id="target-channel" name="channel">
+            <option value="google">Google Merchant / Shopping</option>
+            <option value="meta">Meta catalog</option>
+            <option value="general">General feed readiness</option>
+          </select>
+        </div>
+        <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
+      </form>
+
+      <details class="manual-panel" id="manual-panel">
+        <summary>Browser couldn’t read the public endpoint? Analyze public/sample product JSON locally instead</summary>
+        <div class="manual-content">
+          <p>A browser access failure does <strong>not</strong> mean the store has a feed problem. Some storefronts block cross-origin browser requests. If you already have public or non-sensitive sample Shopify-style JSON, paste <code>{"products":[...]}</code> here. It stays in this browser tab and is not included in validation telemetry.</p>
+          <label for="manual-json">Public or non-sensitive sample product JSON</label>
+          <textarea id="manual-json" rows="8" spellcheck="false" placeholder='{"products":[{"title":"Example","body_html":"...","vendor":"Brand","product_type":"Shirts","images":[],"variants":[{"sku":"SKU-1","price":"29.00"}]}]}'></textarea>
+          <button id="manual-button" class="button secondary" type="button">Analyze pasted JSON</button>
+          <p id="manual-message" class="form-message" role="status" aria-live="polite"></p>
+        </div>
+      </details>
+    </section>
+
+    <section id="results" class="results shell" hidden aria-labelledby="results-title">
+      <div class="results-head">
+        <div>
+          <p class="eyebrow">YOUR PRODUCT FEED HEALTH REPORT</p>
+          <h2 id="results-title">Product Feed Health</h2>
+          <p id="report-scope" class="muted"></p>
+        </div>
+        <div class="score-ring" aria-label="Feed health score">
+          <strong id="score-value">—</strong><span>/100</span>
+        </div>
+      </div>
+
+      <div class="summary-grid">
+        <article><span class="dot critical"></span><strong id="critical-count">0</strong><p>critical findings</p></article>
+        <article><span class="dot warning"></span><strong id="warning-count">0</strong><p>warnings</p></article>
+        <article><span class="dot opportunity"></span><strong id="opportunity-count">0</strong><p>opportunities</p></article>
+      </div>
+
+      <section class="repair-plan" aria-labelledby="repair-plan-title">
+        <div class="repair-plan-head">
+          <div>
+            <p class="eyebrow">STEP 02 · WHAT TO FIX FIRST</p>
+            <h3 id="repair-plan-title">Prioritized repair plan</h3>
+            <p id="repair-summary" class="muted">Your highest-impact actions will appear here.</p>
+          </div>
+          <span class="plan-note">Advisory only · no store changes</span>
+        </div>
+        <div id="priority-actions" class="priority-actions"></div>
+      </section>
+
+      <div id="findings" class="findings"></div>
+
+      <div class="method-card">
+        <div>
+          <p class="card-kicker">Scoring method</p>
+          <p>Score is the weighted completeness rate across title, description, image, image alt text, vendor, product type, SKU, and positive price checks. Barcode/GTIN coverage is shown as an opportunity and does not reduce the score.</p>
+        </div>
+        <button id="copy-report" class="button ghost" type="button">Copy actionable report</button>
+      </div>
+
+      <section class="coverage-note" aria-labelledby="coverage-title">
+        <p class="card-kicker">Coverage boundary</p>
+        <h3 id="coverage-title">What this scan can — and cannot — verify</h3>
+        <div class="coverage-grid">
+          <p><strong>Checked now:</strong> public Shopify product-data completeness and consistency available to this browser.</p>
+          <p><strong>Not checked:</strong> Merchant Center disapprovals, policy flags, shipping settings, account diagnostics, private inventory, or authenticated channel status.</p>
+        </div>
+      </section>
+
+      <section class="cta-panel" aria-labelledby="cta-title">
+        <p class="eyebrow">STEP 03 · OPTIONAL FEEDBACK</p>
+        <h3 id="cta-title">Would you like help turning this repair queue into fixes?</h3>
+        <p>Your choice helps us improve Feed Health. Minimal validation telemetry submits only the event type and broad report bands. It does not include your store URL, pasted JSON, product names, Shopify credentials, customer/order data, or payment information. Netlify Forms may attach standard request metadata such as IP address and user agent to form submissions.</p>
+        <div class="cta-actions">
+          <button id="fix-interest" class="button primary" type="button">Yes — help me fix these</button>
+          <button id="price-interest" class="button secondary" type="button">I’d consider a future $19/mo pilot</button>
+        </div>
+        <p id="intent-message" class="intent-message" role="status" aria-live="polite"></p>
+      </section>
+    </section>
+
+    <section class="explain shell">
+      <div class="section-heading">
+        <p class="eyebrow">WHY FEED HEALTH?</p>
+        <h2>Go from “something is wrong” to a repair queue your team can actually use.</h2>
+      </div>
+      <div class="feature-grid">
+        <article><span>01</span><h3>Prioritize</h3><p>Critical identity and sellability gaps rise above lower-impact opportunities.</p></article>
+        <article><span>02</span><h3>Repair</h3><p>Each finding includes why it matters, affected records, concrete steps, and examples.</p></article>
+        <article><span>03</span><h3>Verify</h3><p>Run the check again after edits to confirm the public product data now passes the same deterministic rules.</p></article>
+      </div>
+    </section>
+
+    <section id="privacy" class="privacy shell">
+      <div>
+        <p class="eyebrow">PRIVACY & COVERAGE</p>
+        <h2>Useful diagnostics without asking for sensitive access</h2>
+      </div>
+      <div class="privacy-grid">
+        <p><strong>No Shopify admin login.</strong> Never enter a store-admin password or credential here.</p>
+        <p><strong>No secrets.</strong> Never paste API secrets, private access tokens, or authentication keys.</p>
+        <p><strong>No customer or financial data.</strong> Never provide orders, customer PII, card, bank, payment, or private financial data.</p>
+        <p><strong>No persistent tracking.</strong> No cookies, localStorage, sessionStorage, ad pixels, or third-party analytics SDKs are used.</p>
+        <p><strong>Minimal validation telemetry.</strong> We submit only validation events and broad score/product-count bands to improve the experience. Store URLs and product payloads are excluded. Netlify Forms may attach standard request metadata such as IP address and user agent.</p>
+        <p><strong>Coverage boundary.</strong> Results are advisory and are not authenticated Google Merchant Center, Meta, or Shopify Admin diagnostics.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="shell footer">
+    <p><strong>Feed Health</strong> · Shopify product-data quality tool</p>
+    <p>Free health check · No payment method collected · Repair guidance is informational and does not alter your store.</p>
+  </footer>
+
+  <form name="feed-health-validation" method="POST" data-netlify="true" netlify-honeypot="bot-field" class="collector-form" aria-hidden="true">
+    <input type="hidden" name="form-name" value="feed-health-validation" />
+    <p class="collector-honeypot"><label>Leave this field empty <input name="bot-field" type="text" tabindex="-1" autocomplete="off" /></label></p>
+    <input type="hidden" name="event_type" />
+    <input type="hidden" name="subject_key" />
+    <input type="hidden" name="occurred_at" />
+    <input type="hidden" name="mode" />
+    <input type="hidden" name="channel" />
+    <input type="hidden" name="score_band" />
+    <input type="hidden" name="product_count_band" />
+    <input type="hidden" name="p1_count" />
+    <input type="hidden" name="failure_code" />
+    <input type="hidden" name="concept" />
+    <input type="hidden" name="charge_today" />
+    <input type="hidden" name="release_version" />
+  </form>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
