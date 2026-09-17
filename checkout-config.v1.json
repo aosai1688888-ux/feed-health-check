@@ -1,0 +1,20 @@
+{
+  "schema": "feed-health.checkout-config.v1",
+  "authority_id": "QIANWU-QIHANG-FIRST-PAYMENT-REVENUE-ENGINE-V1.0",
+  "status": "CANDIDATE_FAIL_CLOSED",
+  "provider": "UNBOUND",
+  "enabled": false,
+  "checkout_url": null,
+  "currency": "USD",
+  "sku": "VERIFIED_FEED_DIAGNOSIS",
+  "price": 49,
+  "success_confirmation": "TRUSTED_SERVER_ONLY",
+  "browser_may_assert_success": false,
+  "first_real_external_payment_requires": [
+    "trusted_provider_or_server_confirmation",
+    "external_customer",
+    "non_test_transaction",
+    "non_founder_or_team_transaction",
+    "traceable_acquisition_and_buyer_action_path"
+  ]
+}

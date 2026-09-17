@@ -1,0 +1,41 @@
+name: Feed Health First Payment Gate V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'app.js'
+      - 'first-payment.js'
+      - 'first-payment.css'
+      - 'first-payment-offer.v1.json'
+      - 'checkout-config.v1.json'
+      - 'scripts/verify-first-payment-v1.py'
+      - '.github/workflows/first-payment-gate-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  first-payment-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact reviewed head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 -m json.tool first-payment-offer.v1.json >/dev/null
+          python3 -m json.tool checkout-config.v1.json >/dev/null
+          node --check app.js
+          node --check first-payment.js
+          python3 scripts/verify-first-payment-v1.py

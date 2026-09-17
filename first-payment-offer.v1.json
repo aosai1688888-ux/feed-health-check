@@ -1,0 +1,53 @@
+{
+  "schema": "feed-health.first-payment-offer.v1",
+  "authority_id": "QIANWU-QIHANG-FIRST-PAYMENT-REVENUE-ENGINE-V1.0",
+  "status": "CANDIDATE_NOT_PRODUCTION_ACTIVE",
+  "sku": "VERIFIED_FEED_DIAGNOSIS",
+  "name": "Verified Feed Diagnosis",
+  "currency": "USD",
+  "default_test_price": 49,
+  "price_test_band": {
+    "min": 29,
+    "max": 79
+  },
+  "payment_before_delivery": true,
+  "public_scan_boundary": {
+    "source_strength": "PUBLIC_OBSERVATION",
+    "can_claim_authenticated_google_status": false,
+    "can_claim_authenticated_shopify_admin_status": false,
+    "can_guarantee_sales_or_approval": false
+  },
+  "included": [
+    "Manual verification of the highest-priority reproducible findings",
+    "Affected-product examples and counts when the evidence supports them",
+    "Evidence/source-strength label for every paid finding",
+    "Likely repair owner for every verified issue",
+    "Prioritized repair order",
+    "Written diagnosis summary"
+  ],
+  "not_included": [
+    "Guaranteed Google Merchant approval",
+    "Guaranteed ranking, traffic, ROAS or sales increase",
+    "Automatic changes to the merchant's Shopify store",
+    "Authenticated Google Merchant Center diagnostics unless the merchant separately authorizes access",
+    "Done-for-you repair work"
+  ],
+  "primary_action": "BUY_DIAGNOSIS",
+  "checkout_action": "START_CHECKOUT",
+  "success_event": "PAYMENT_SUCCEEDED",
+  "failure_events": [
+    "PAYMENT_FAILED",
+    "PAYMENT_CANCELLED"
+  ],
+  "checkout_policy": {
+    "provider": "UNBOUND",
+    "client_may_assert_payment_success": false,
+    "trusted_server_confirmation_required": true,
+    "test_payment_counts_as_first_real_external_payment": false,
+    "founder_or_team_payment_counts_as_first_real_external_payment": false
+  },
+  "activation_gates": [
+    "P0_B_RESULT_PAGE_PASS",
+    "P0_C_CHECKOUT_PASS"
+  ]
+}
