@@ -7,9 +7,11 @@
   <meta name="description" content="Free Shopify product-data health check with prioritized, actionable repair guidance for common feed-readiness issues." />
   <meta name="robots" content="index,follow" />
   <meta name="referrer" content="no-referrer" />
+  <meta name="feed-health-authority" content="QIANWU-QIHANG-FIRST-PAYMENT-REVENUE-ENGINE-V1.0" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="collector.css" />
+  <link rel="stylesheet" href="first-payment.css" />
 </head>
 <body>
   <header class="nav shell">
@@ -169,15 +171,24 @@
 
   <footer class="shell footer">
     <p><strong>Feed Health</strong> · Shopify product-data quality tool</p>
-    <p>Free health check · No payment method collected · Repair guidance is informational and does not alter your store.</p>
+    <p>Free public health check · No card details are entered on this page · Any future paid checkout is handled only by the explicitly bound secure payment provider.</p>
   </footer>
 
   <form name="feed-health-validation" method="POST" data-netlify="true" netlify-honeypot="bot-field" class="collector-form" aria-hidden="true">
     <input type="hidden" name="form-name" value="feed-health-validation" />
     <p class="collector-honeypot"><label>Leave this field empty <input name="bot-field" type="text" tabindex="-1" autocomplete="off" /></label></p>
     <input type="hidden" name="event_type" />
+    <input type="hidden" name="event_id" />
     <input type="hidden" name="subject_key" />
+    <input type="hidden" name="session_ref" />
     <input type="hidden" name="occurred_at" />
+    <input type="hidden" name="source_channel" />
+    <input type="hidden" name="cohort_ref" />
+    <input type="hidden" name="offer_ref" />
+    <input type="hidden" name="checkout_ref" />
+    <input type="hidden" name="amount" />
+    <input type="hidden" name="currency" />
+    <input type="hidden" name="payment_state" />
     <input type="hidden" name="mode" />
     <input type="hidden" name="channel" />
     <input type="hidden" name="score_band" />
@@ -190,5 +201,6 @@
   </form>
 
   <script src="app.js" defer></script>
+  <script src="first-payment.js" defer></script>
 </body>
 </html>
