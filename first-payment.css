@@ -1,0 +1,124 @@
+.first-payment-offer {
+  display: grid;
+  gap: 24px;
+}
+
+.offer-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 28px;
+  align-items: start;
+}
+
+.offer-lede {
+  max-width: 760px;
+}
+
+.offer-price {
+  min-width: 170px;
+  padding: 18px 20px;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.offer-price span,
+.offer-price small {
+  color: #667085;
+  font-size: 0.78rem;
+}
+
+.offer-price strong {
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  letter-spacing: -0.04em;
+}
+
+.offer-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 18px;
+}
+
+.offer-list {
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  list-style: none;
+}
+
+.offer-list li {
+  position: relative;
+  padding-left: 26px;
+}
+
+.offer-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-weight: 800;
+}
+
+.evidence-card,
+.evidence-standard-detail {
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  border-radius: 18px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.evidence-card p,
+.evidence-standard-detail p {
+  margin: 8px 0;
+}
+
+.evidence-standard-detail[hidden] {
+  display: none;
+}
+
+.offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.offer-actions .button {
+  text-decoration: none;
+}
+
+.offer-footnote {
+  margin: 0;
+  color: #667085;
+  font-size: 0.88rem;
+}
+
+.intent-message.warning {
+  color: #8a4b00;
+}
+
+@media (max-width: 760px) {
+  .offer-head,
+  .offer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .offer-price {
+    text-align: left;
+    min-width: 0;
+  }
+
+  .offer-actions {
+    align-items: stretch;
+  }
+
+  .offer-actions .button {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+}
