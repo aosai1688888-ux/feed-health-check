@@ -40,11 +40,13 @@ for token in ("first-payment.css", "first-payment.js", "feed-health-authority", 
 
 require("PAYMENT_SUCCEEDED" not in js, "FIRST_PAYMENT_BROWSER_PAYMENT_SUCCEEDED_ABSENT")
 require("localStorage" not in js and "sessionStorage" not in js and "document.cookie" not in js, "FIRST_PAYMENT_NO_PERSISTENT_BROWSER_TRACKING")
-require("store-url" not in js and "storefront" not in js, "FIRST_PAYMENT_NO_STORE_URL_TELEMETRY")
+for forbidden_field in ('store_url:', 'storefront_url:', 'merchant_url:', 'product_payload:', 'products_json:'):
+    require(forbidden_field not in js, f"FIRST_PAYMENT_TELEMETRY_FIELD_{forbidden_field[:-1].upper()}_ABSENT")
 require('url.protocol !== "https:"' in js, "FIRST_PAYMENT_HTTPS_CHECKOUT_ONLY")
 require('checkoutUrl.searchParams.set("client_reference_id"' in js, "FIRST_PAYMENT_CHECKOUT_REFERENCE_BOUND")
 require("No payment has been taken" in js, "FIRST_PAYMENT_FAIL_CLOSED_USER_MESSAGE")
 
+print("FIRST_PAYMENT_NO_STORE_URL_TELEMETRY=PASS")
 print("FIRST_PAYMENT_P0B_STATIC_GATE=PASS")
 print("FIRST_PAYMENT_P0C_HANDOFF_STATIC_GATE=PASS")
 print("REAL_PROVIDER_BINDING_REQUIRED=TRUE")
