@@ -50,19 +50,9 @@ async function postBuyerAction(eventName, detail = {}) {
     payment_state: safeToken(detail.payment_state),
     release_version: FIRST_PAYMENT_RELEASE
   };
-  try {
-    const response = await fetch("/", {
-      method: "POST",
-      credentials: "omit",
-      cache: "no-store",
-      keepalive: true,
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(payload).toString()
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
+  // The new static host does not yet have a consent-reviewed event endpoint.
+  // Do not claim checkout interest or payment from a failed POST to "/".
+  return false;
 }
 
 async function loadJson(path) {

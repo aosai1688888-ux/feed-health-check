@@ -68,20 +68,9 @@ function telemetryPayload(event) {
 }
 
 async function submitValidationEvent(event) {
-  if (!VALIDATION_EVENT_TYPES.has(event.event_type)) return false;
-  try {
-    const response = await fetch("/", {
-      method: "POST",
-      credentials: "omit",
-      cache: "no-store",
-      keepalive: true,
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(telemetryPayload(event)).toString()
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
+  // A static site must not falsely report that interest was captured.
+  // Wait for the privacy-reviewed Group Gateway event collector before POST.
+  return false;
 }
 
 function recordEvent(eventType, detail = {}) {
@@ -556,9 +545,10 @@ $("fix-interest").addEventListener("click", async () => {
   const delivered = await recordEvent("FIX_INTEREST", {
     score_band: latestReport ? scoreBand(latestReport.score) : "unknown"
   });
-  intentMessage.textContent = delivered
-    ? "Thanks — your fix interest was recorded with minimal validation telemetry. Our submitted payload excludes your store URL, product data, credentials, and payment information; Netlify Forms may attach standard request metadata such as IP address and user agent."
-    : "Thanks — your fix interest is noted in this browser session. Validation telemetry delivery was unavailable, and no sensitive store data was sent.";
+  intentMessage.textContent = "Your email draft is opening. Review the message and press Send yourself; no diagnostic data or payment was automatically submitted.";
+  location.href = "mailto:feedhealth@qianwuai.com?subject=" +
+    encodeURIComponent("Feed Health: request help with public product data") +
+    "&body=" + encodeURIComponent("Hello QIANWU Feed Health,\n\nI would like help with public product-feed data. Please advise on the next steps. I will share only appropriately authorized information.\n");
   intentMessage.className = "intent-message success";
 });
 
@@ -567,9 +557,10 @@ $("price-interest").addEventListener("click", async () => {
     concept: "future_19_usd_month_pilot",
     charge_today: false
   });
-  intentMessage.textContent = delivered
-    ? "Thanks — future pilot interest was recorded with minimal validation telemetry. No payment method was requested or collected; Netlify Forms may attach standard request metadata such as IP address and user agent."
-    : "Thanks — future pilot interest is noted in this browser session. Validation telemetry delivery was unavailable; no payment method was requested or collected.";
+  intentMessage.textContent = "Your email draft is opening. Review it and press Send to ask about the $49 verified diagnosis. No payment has been taken.";
+  location.href = "mailto:feedhealth@qianwuai.com?subject=" +
+    encodeURIComponent("Feed Health: $49 Verified Diagnosis enquiry") +
+    "&body=" + encodeURIComponent("Hello QIANWU Feed Health,\n\nPlease share the current scope and availability of the $49 Verified Feed Diagnosis. I understand checkout is not enabled until a secure payment provider is verified.\n");
   intentMessage.className = "intent-message success";
 });
 

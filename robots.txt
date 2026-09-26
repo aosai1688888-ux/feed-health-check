@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://feed.qianwuai.com/sitemap.xml
