@@ -1,0 +1,43 @@
+name: Feed Health Railway Static Host Gate
+on:
+  pull_request:
+    branches: [main]
+    paths: ['index.html','app.js','first-payment.js','checkout-config.v1.json','Dockerfile','nginx.conf','privacy.html','terms.html','contact.html','robots.txt','sitemap.xml','scripts/verify-railway-migration-v1.py','.github/workflows/railway-static-host-gate-v1.yml']
+  push:
+    branches: [main]
+    paths: ['index.html','app.js','first-payment.js','checkout-config.v1.json','Dockerfile','nginx.conf','privacy.html','terms.html','contact.html','robots.txt','sitemap.xml','scripts/verify-railway-migration-v1.py','.github/workflows/railway-static-host-gate-v1.yml']
+permissions: { contents: read }
+jobs:
+  static-host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+      - name: Verify buyer truth, legal identity and fail-closed checkout
+        run: |
+          set -euo pipefail
+          node --check app.js
+          node --check first-payment.js
+          python3 scripts/verify-first-payment-v1.py
+          python3 scripts/verify-railway-migration-v1.py
+      - name: Container runtime, security and site routes
+        run: |
+          set -euo pipefail
+          docker build -t qianwu-feedhealth-static:ci .
+          docker run -d --rm --name feed-health-ci -p 127.0.0.1:18080:8080 qianwu-feedhealth-static:ci
+          trap 'docker stop feed-health-ci >/dev/null || true' EXIT
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then break; fi
+            sleep 1
+          done
+          for p in / /healthz /privacy.html /terms.html /contact.html /app.js /first-payment.js /robots.txt /sitemap.xml; do
+            curl -fsS -o /dev/null "http://127.0.0.1:18080$p"
+          done
+          curl -fsSI http://127.0.0.1:18080/ | grep -iq 'x-robots-tag: noindex'
+          curl -fsSI -H 'Host: feed.qianwuai.com' http://127.0.0.1:18080/ | grep -iq 'x-content-type-options: nosniff'
+          ! curl -fsS http://127.0.0.1:18080/ | grep -qi 'data-netlify'
+          echo FEED_STATIC_RUNTIME_GATE_PASS

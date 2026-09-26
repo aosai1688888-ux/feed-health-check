@@ -3,14 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Shopify Product Feed Health Check</title>
+  <title>Feed Health | Shopify Product Data Diagnostics | QIANWU</title>
   <meta name="description" content="Free Shopify product-data health check with prioritized, actionable repair guidance for common feed-readiness issues." />
   <meta name="robots" content="index,follow" />
+  <link rel="canonical" href="https://feed.qianwuai.com/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://feed.qianwuai.com/" />
+  <meta property="og:title" content="Feed Health | Shopify Product Data Diagnostics | QIANWU" />
+  <meta name="theme-color" content="#113047" />
+  <meta name="feed-health-event-contract" content="event_id checkout_ref payment_state: TRUSTED_SERVER_ONLY" />
   <meta name="referrer" content="no-referrer" />
   <meta name="feed-health-authority" content="QIANWU-QIHANG-FIRST-PAYMENT-REVENUE-ENGINE-V1.0" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'" />
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="collector.css" />
   <link rel="stylesheet" href="first-payment.css" />
 </head>
 <body>
@@ -19,7 +24,7 @@
       <span class="brand-mark">FH</span>
       <span>Feed Health</span>
     </a>
-    <a class="nav-link" href="#privacy">Privacy & coverage</a>
+    <nav aria-label="Business information"><a class="nav-link" href="#privacy">Privacy & coverage</a> <a class="nav-link" href="/privacy.html">Privacy</a> <a class="nav-link" href="/contact.html">Contact</a></nav>
   </header>
 
   <main id="top">
@@ -132,10 +137,10 @@
       <section class="cta-panel" aria-labelledby="cta-title">
         <p class="eyebrow">STEP 03 · OPTIONAL FEEDBACK</p>
         <h3 id="cta-title">Would you like help turning this repair queue into fixes?</h3>
-        <p>Your choice helps us improve Feed Health. Minimal validation telemetry submits only the event type and broad report bands. It does not include your store URL, pasted JSON, product names, Shopify credentials, customer/order data, or payment information. Netlify Forms may attach standard request metadata such as IP address and user agent to form submissions.</p>
+        <p>These buttons open a message draft that you review and send yourself. We do not record interest on this site until a privacy-reviewed first-party event collector is available. Your storefront data and pasted product JSON remain in this browser tab.</p>
         <div class="cta-actions">
           <button id="fix-interest" class="button primary" type="button">Yes — help me fix these</button>
-          <button id="price-interest" class="button secondary" type="button">I’d consider a future $19/mo pilot</button>
+          <button id="price-interest" class="button secondary" type="button">Ask about $49 verified diagnosis</button>
         </div>
         <p id="intent-message" class="intent-message" role="status" aria-live="polite"></p>
       </section>
@@ -163,42 +168,16 @@
         <p><strong>No secrets.</strong> Never paste API secrets, private access tokens, or authentication keys.</p>
         <p><strong>No customer or financial data.</strong> Never provide orders, customer PII, card, bank, payment, or private financial data.</p>
         <p><strong>No persistent tracking.</strong> No cookies, localStorage, sessionStorage, ad pixels, or third-party analytics SDKs are used.</p>
-        <p><strong>Minimal validation telemetry.</strong> We submit only validation events and broad score/product-count bands to improve the experience. Store URLs and product payloads are excluded. Netlify Forms may attach standard request metadata such as IP address and user agent.</p>
+        <p><strong>Current collection boundary.</strong> This public website does not transmit in-browser diagnostic results or interest events to a server. If you choose email, your own mail provider sends only what you review. Hosting providers may process standard technical request logs. See <a href="/privacy.html">our privacy notice</a>.</p>
         <p><strong>Coverage boundary.</strong> Results are advisory and are not authenticated Google Merchant Center, Meta, or Shopify Admin diagnostics.</p>
       </div>
     </section>
   </main>
 
   <footer class="shell footer">
-    <p><strong>Feed Health</strong> · Shopify product-data quality tool</p>
+    <p><strong>Feed Health</strong> · Operated by Shenzhen Qianwu Digital Technology Co., Ltd. (深圳市乾五数字科技有限公司)</p><p><a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a> · <a href="/contact.html">Contact</a></p>
     <p>Free public health check · No card details are entered on this page · Any future paid checkout is handled only by the explicitly bound secure payment provider.</p>
   </footer>
-
-  <form name="feed-health-validation" method="POST" data-netlify="true" netlify-honeypot="bot-field" class="collector-form" aria-hidden="true">
-    <input type="hidden" name="form-name" value="feed-health-validation" />
-    <p class="collector-honeypot"><label>Leave this field empty <input name="bot-field" type="text" tabindex="-1" autocomplete="off" /></label></p>
-    <input type="hidden" name="event_type" />
-    <input type="hidden" name="event_id" />
-    <input type="hidden" name="subject_key" />
-    <input type="hidden" name="session_ref" />
-    <input type="hidden" name="occurred_at" />
-    <input type="hidden" name="source_channel" />
-    <input type="hidden" name="cohort_ref" />
-    <input type="hidden" name="offer_ref" />
-    <input type="hidden" name="checkout_ref" />
-    <input type="hidden" name="amount" />
-    <input type="hidden" name="currency" />
-    <input type="hidden" name="payment_state" />
-    <input type="hidden" name="mode" />
-    <input type="hidden" name="channel" />
-    <input type="hidden" name="score_band" />
-    <input type="hidden" name="product_count_band" />
-    <input type="hidden" name="p1_count" />
-    <input type="hidden" name="failure_code" />
-    <input type="hidden" name="concept" />
-    <input type="hidden" name="charge_today" />
-    <input type="hidden" name="release_version" />
-  </form>
 
   <script src="app.js" defer></script>
   <script src="first-payment.js" defer></script>
