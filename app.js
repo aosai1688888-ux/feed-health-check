@@ -124,6 +124,27 @@ function allVariantsPass(product, predicate) {
   return variants.length > 0 && variants.every(predicate);
 }
 
+function validPositivePrice(value) {
+  if (typeof value === "number") return Number.isFinite(value) && value > 0;
+  if (typeof value !== "string") return false;
+  const text = value.trim();
+  if (!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(text)) return false;
+  const price = Number(text);
+  return Number.isFinite(price) && price > 0;
+}
+
+function usableProductImage(image) {
+  if (!image || typeof image !== "object" || Array.isArray(image) ||
+      typeof image.src !== "string" || !image.src.trim()) return false;
+  try {
+    const url = new URL(image.src.trim());
+    return (url.protocol === "https:" || url.protocol === "http:") &&
+      Boolean(url.hostname) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 function findingDefinitions() {
   return [
     {
@@ -327,12 +348,12 @@ function auditProducts(products, source, channel) {
     const checks = {
       title: title.length >= 3,
       description: description.length >= 80,
-      image: images.length > 0,
-      alt: images.length > 0 && images.every(img => String(img?.alt || "").trim().length > 0),
+      image: images.some(usableProductImage),
+      alt: images.some(usableProductImage) && images.every(img => String(img?.alt || "").trim().length > 0),
       vendor: String(product?.vendor || "").trim().length > 0,
       productType: String(product?.product_type || product?.productType || "").trim().length > 0,
       sku: allVariantsPass(product, variant => String(variant?.sku || "").trim().length > 0),
-      price: allVariantsPass(product, variant => Number.parseFloat(variant?.price) > 0)
+      price: allVariantsPass(product, variant => validPositivePrice(variant?.price))
     };
 
     Object.entries(checks).forEach(([key, pass]) => {

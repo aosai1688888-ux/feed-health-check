@@ -2,10 +2,10 @@ name: Feed Health Railway Static Host Gate
 on:
   pull_request:
     branches: [main]
-    paths: ['index.html','app.js','first-payment.js','checkout-config.v1.json','Dockerfile','nginx.conf','privacy.html','terms.html','contact.html','robots.txt','sitemap.xml','scripts/verify-railway-migration-v1.py','.github/workflows/railway-static-host-gate-v1.yml']
+    paths: ['index.html','app.js','first-payment.js','checkout-config.v1.json','Dockerfile','nginx.conf','privacy.html','terms.html','contact.html','robots.txt','sitemap.xml','scripts/verify-railway-migration-v1.py','scripts/test-diagnostic-score-truth-v1.cjs','.github/workflows/railway-static-host-gate-v1.yml']
   push:
     branches: [main]
-    paths: ['index.html','app.js','first-payment.js','checkout-config.v1.json','Dockerfile','nginx.conf','privacy.html','terms.html','contact.html','robots.txt','sitemap.xml','scripts/verify-railway-migration-v1.py','.github/workflows/railway-static-host-gate-v1.yml']
+    paths: ['index.html','app.js','first-payment.js','checkout-config.v1.json','Dockerfile','nginx.conf','privacy.html','terms.html','contact.html','robots.txt','sitemap.xml','scripts/verify-railway-migration-v1.py','scripts/test-diagnostic-score-truth-v1.cjs','.github/workflows/railway-static-host-gate-v1.yml']
 permissions: { contents: read }
 jobs:
   static-host:
@@ -21,6 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           node --check app.js
+          node --test scripts/test-diagnostic-score-truth-v1.cjs
           node --check first-payment.js
           python3 scripts/verify-first-payment-v1.py
           python3 scripts/verify-railway-migration-v1.py

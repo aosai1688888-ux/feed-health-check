@@ -1,0 +1,77 @@
+{
+  "schema": "feed-health.diagnostic-score-truth-evidence.v1",
+  "observed_at": "2026-10-07T07:48:59.537788+00:00",
+  "base_exact_sha": "29a00bd1e1e33979298b4f1b251b9bc5ea4433b1",
+  "scope": [
+    "app.js",
+    "scripts/test-diagnostic-score-truth-v1.cjs",
+    ".github/workflows/railway-static-host-gate-v1.yml"
+  ],
+  "fixtures": "OFFLINE_SYNTHETIC_NOT_BUSINESS_EVIDENCE",
+  "before": {
+    "tests": 35,
+    "pass": 20,
+    "fail": 15,
+    "node_test_exit_code": 1,
+    "defects": [
+      "malformed/non-finite price accepted by parseFloat",
+      "image metadata without usable src counted as image"
+    ],
+    "combined_invalid_price_and_src_score": 100
+  },
+  "after": {
+    "tests": 35,
+    "pass": 35,
+    "fail": 0,
+    "node_test_exit_code": 0,
+    "combined_invalid_price_and_src_score": 65,
+    "valid_fixture_score": 100
+  },
+  "checks": [
+    {
+      "command": [
+        "node",
+        "--check",
+        "app.js"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "node",
+        "--test",
+        "scripts/test-diagnostic-score-truth-v1.cjs"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "python3",
+        "scripts/verify-first-payment-v1.py"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "python3",
+        "scripts/verify-railway-migration-v1.py"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "production_deployments": 0,
+  "network_calls": 0,
+  "business_truth_writes": 0,
+  "emails_sent": 0,
+  "checkout_enabled": false,
+  "price_or_offer_change": false,
+  "claim_limit": "SOURCE_ONLY_NOT_PRODUCTION_ADMISSION_NOT_FINAL_SEAL"
+}
