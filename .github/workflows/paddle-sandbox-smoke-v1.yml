@@ -71,6 +71,18 @@ jobs:
         run: |
           set -euo pipefail
           cp Dockerfile nginx.conf index.html app.js first-payment.js first-payment.css first-payment-offer.v1.json styles.css collector.css privacy.html terms.html contact.html robots.txt sitemap.xml "$STAGE_DIR/"
+          # Only the isolated HTTP localhost smoke fixture may read local JSON over http.
+          # Never modify the original production CSP to permit insecure origins.
+          python3 - "$STAGE_DIR/nginx.conf" "$STAGE_DIR/index.html" <<'PY_CSP'
+          import sys
+          from pathlib import Path
+          for fn in sys.argv[1:]:
+              p=Path(fn)
+              text=p.read_text()
+              assert text.count("connect-src https:;")==1
+              p.write_text(text.replace("connect-src https:;","connect-src https: http://127.0.0.1:18091;"))
+          print("STAGING_ONLY_LOCALHOST_CSP_ALLOWLIST=PASS")
+          PY_CSP
           docker build --quiet -t feedhealth-sandbox-ephemeral:ci "$STAGE_DIR" >/dev/null
           docker run -d --rm --name feedhealth-sandbox-ephemeral-ci -p 127.0.0.1:18091:8080 feedhealth-sandbox-ephemeral:ci >/dev/null
           trap 'docker stop feedhealth-sandbox-ephemeral-ci >/dev/null 2>&1 || true; rm -rf "$STAGE_DIR"' EXIT
