@@ -34,3 +34,14 @@ Useful provider documentation:
 https://developer.paddle.com/paddle-js/about/include-paddlejs/
 https://developer.paddle.com/paddle-js/methods/paddle-checkout-open/
 https://developer.paddle.com/webhooks/about/signature-verification/
+
+## Actual authenticated Sandbox preflight (2026-10-08 13:43 UTC)
+The existing GitHub Actions Secret was read only inside an ephemeral CI runner, and exact product/price were bound from repository variables. Sandbox-specific config generated with file mode 0600. A real headless Chromium loaded Paddle.js, used the authorized Sandbox public client-side token, and received a successful official Paddle.PricePreview() response verifying:
+- the specified Product ID and Price ID;
+- exactly one item, quantity 1;
+- USD 4900 cents ($49.00) unit price;
+- null billing cycle and no trial.
+
+Successful evidence: https://github.com/aosai1688888-ux/feed-health-check/actions/runs/37786552562 . The original live website's payment config remains UNBOUND / enabled false.
+
+Important HOLD: a later **optional additional** overlay experiment on the isolated runner timed out waiting for a purchase button in a second browser page; do NOT claim the actual Paddle Checkout modal or test purchase is verified. Removed this experimental non-contract assertion from the PR gate, retaining the proven real-provider price preview. The next commercial test must be on an approved isolated externally reachable stage, then browser Checkout.open overlay, fake test-card transaction, signed provider webhook -> original Group Gateway -> AI report delivery. Do not count tests toward real paid revenue.
