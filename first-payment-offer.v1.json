@@ -18,19 +18,19 @@
     "can_guarantee_sales_or_approval": false
   },
   "included": [
-    "Manual verification of the highest-priority reproducible findings",
+    "AI-generated analysis of reproducible product feed issues in data provided by the buyer",
     "Affected-product examples and counts when the evidence supports them",
-    "Evidence/source-strength label for every paid finding",
-    "Likely repair owner for every verified issue",
-    "Prioritized repair order",
-    "Written diagnosis summary"
+    "Source-strength labels and transparent coverage limits for every diagnosis",
+    "Prioritized repair actions generated automatically by the diagnostic engine",
+    "A digital diagnostic report generated and delivered by the software"
   ],
   "not_included": [
     "Guaranteed Google Merchant approval",
     "Guaranteed ranking, traffic, ROAS or sales increase",
     "Automatic changes to the merchant's Shopify store",
     "Authenticated Google Merchant Center diagnostics unless the merchant separately authorizes access",
-    "Done-for-you repair work"
+    "Done-for-you repair work",
+    "Human expert review or consultancy"
   ],
   "primary_action": "BUY_DIAGNOSIS",
   "checkout_action": "START_CHECKOUT",
@@ -49,5 +49,7 @@
   "activation_gates": [
     "P0_B_RESULT_PAGE_PASS",
     "P0_C_CHECKOUT_PASS"
-  ]
+  ],
+  "delivery_mode": "AI_AUTOMATED_AFTER_TRUSTED_PAYMENT",
+  "human_review_required": false
 }
