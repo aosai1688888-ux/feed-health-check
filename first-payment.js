@@ -110,6 +110,54 @@ function loadSandboxPaddle() {
   return sandboxPaddleLoad;
 }
 
+// Buyer reports may not be sold until their exact evidence and delivery
+// identity have been durably accepted by the original, governed intake.
+// The current production static site has no such endpoint: fail CLOSED.
+async function reservePaidDiagnosisBeforeCheckout(config, checkoutRef, email, consent) {
+  if (!consent || typeof email !== "string"
+      || !/^[^\\s@]{1,64}@[^\\s@]{1,190}\\.[A-Za-z]{2,40}$/.test(email)
+      || typeof checkoutRef !== "string" || !/^[0-9a-f-]{20,80}$/i.test(checkoutRef)
+      || config?.fulfillment?.mode !== "AUTOMATIC_AI_ONLY"
+      || config?.fulfillment?.status !== "VERIFIED_READY"
+      || config?.fulfillment?.intake_path !== "/v1/feedhealth/checkout-intents"
+      || !isSandboxPaddleCheckout(config)) {
+    throw new Error("TRUSTED_DIAGNOSIS_INTAKE_NOT_READY");
+  }
+  const getEvidence = globalThis.feedHealthBuyerEvidenceSnapshotV1;
+  const evidence = typeof getEvidence === "function" ? getEvidence() : null;
+  if (!evidence || evidence.schema !== "feedhealth.buyer_evidence_snapshot.v1"
+      || !Array.isArray(evidence.products) || evidence.products.length < 1
+      || evidence.products.length > 50) {
+    throw new Error("BUYER_EVIDENCE_REQUIRED_BEFORE_PAYMENT");
+  }
+  const request = JSON.stringify({
+    schema: "feedhealth.checkout_intent_request.v1",
+    checkout_ref: checkoutRef,
+    delivery_email: email.trim().toLowerCase(),
+    consent_version: "FEEDHEALTH_BUYER_REPORT_DELIVERY_V1",
+    evidence
+  });
+  if (request.length > 135000) throw new Error("BUYER_EVIDENCE_LIMIT_EXCEEDED");
+  // Same-origin only; never forward the buyer's supplied records to Paddle
+  // or to a third-party collector from browser context.
+  const response = await fetch(config.fulfillment.intake_path, {
+    method: "POST", credentials: "same-origin", redirect: "error",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json", "Accept": "application/json",
+               "Idempotency-Key": checkoutRef },
+    body: request
+  });
+  if (response.status !== 201) throw new Error("TRUSTED_DIAGNOSIS_INTAKE_REJECTED");
+  const receipt = await response.json();
+  if (receipt?.schema !== "feedhealth.checkout_intent_receipt.v1"
+      || receipt?.decision !== "ACCEPTED"
+      || receipt?.checkout_ref !== checkoutRef
+      || receipt?.ai_delivery_authorized_after_verified_payment !== true) {
+    throw new Error("TRUSTED_DIAGNOSIS_RECEIPT_MISMATCH");
+  }
+  return receipt;
+}
+
 let sandboxPaddleInitialized = false;
 async function openSandboxPaddleCheckout(config, checkoutRef) {
   if (!isSandboxPaddleCheckout(config)) throw new Error("Sandbox payment not authorized");
@@ -171,6 +219,14 @@ function renderOffer(panel, offer, checkout) {
       <p><strong>BEFORE_AFTER_VERIFIED</strong> — the same rule verified before and after repair.</p>
     </div>
 
+    <div class="offer-evidence-consent">
+      <label for="diagnosis-delivery-email">Email for your automatically generated digital report</label>
+      <input id="diagnosis-delivery-email" type="email" autocomplete="email" maxlength="254"
+        placeholder="buyer@example.com" required />
+      <label><input id="diagnosis-buyer-consent" type="checkbox" />
+        I authorize QIANWU FeedHealth to process the product data I reviewed here solely
+        to generate and securely deliver my requested AI diagnostic report after verified payment.</label>
+    </div>
     <div class="offer-actions">
       <button id="buy-diagnosis" class="button primary" type="button">Get Verified Diagnosis — ${money(currency, price)}</button>
       <a class="button secondary" href="mailto:feedhealth@qianwuai.com?subject=Feed%20Health%20question">Ask a question</a>
@@ -212,17 +268,22 @@ function renderOffer(panel, offer, checkout) {
       checkout_ref: checkoutRef
     });
     if (sandboxReady) {
-      status.textContent = "Opening Paddle Sandbox — test payment only; report delivery is not yet connected.";
+      status.textContent = "Checking trusted diagnosis intake before allowing a Sandbox payment…";
       try {
+        const email = document.getElementById("diagnosis-delivery-email")?.value || "";
+        const consent = document.getElementById("diagnosis-buyer-consent")?.checked === true;
+        await reservePaidDiagnosisBeforeCheckout(checkout, checkoutRef, email, consent);
         await openSandboxPaddleCheckout(checkout, checkoutRef);
       } catch {
-        status.textContent = "Sandbox checkout unavailable. No payment has been taken.";
+        status.textContent = "Sandbox checkout withheld: buyer evidence, consent or verified delivery intake is unavailable. No payment has been taken.";
         status.className = "intent-message warning";
       }
       return;
     }
-    checkoutUrl.searchParams.set("client_reference_id", checkoutRef);
-    location.assign(checkoutUrl.toString());
+    // A future production checkout requires its own separately approved
+    // buyer-to-fulfillment reservation; do not permit unbound payment links.
+    status.textContent = "Payment is withheld until secure AI report delivery is verified.";
+    status.className = "intent-message warning";
   });
 }
 
