@@ -1,0 +1,86 @@
+name: FeedHealth Paddle Sandbox Isolated Smoke V1
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/paddle-sandbox-smoke-v1.yml'
+      - 'first-payment.js'
+      - 'checkout-config.v1.json'
+      - 'scripts/create-paddle-sandbox-config-v1.py'
+      - 'scripts/test-paddle-sandbox-contract-v1.cjs'
+
+permissions:
+  contents: read
+
+jobs:
+  sandbox-smoke:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'fix/feedhealth-paddle-sandbox-candidate-20261008'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact candidate with no persistent credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - name: Verify source and zero-payment boundary
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-first-payment-v1.py >/dev/null
+          node --test scripts/test-paddle-sandbox-contract-v1.cjs >/dev/null
+          node --test scripts/test-diagnostic-score-truth-v1.cjs >/dev/null
+          python3 scripts/verify-railway-migration-v1.py >/dev/null
+          echo "PADDLE_SANDBOX_STATIC_AND_REGRESSIONS=PASS"
+
+      - name: Bind real public Sandbox token and ID values inside ephemeral CI runner
+        env:
+          FEEDHEALTH_PADDLE_SANDBOX_CLIENT_TOKEN: ${{ secrets.FEEDHEALTH_PADDLE_SANDBOX_CLIENT_TOKEN }}
+          FEEDHEALTH_PADDLE_SANDBOX_PRODUCT_ID: ${{ vars.FEEDHEALTH_PADDLE_SANDBOX_PRODUCT_ID }}
+          FEEDHEALTH_PADDLE_SANDBOX_PRICE_ID: ${{ vars.FEEDHEALTH_PADDLE_SANDBOX_PRICE_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          STAGE="$(mktemp -d)"
+          echo "STAGE_DIR=$STAGE" >> "$GITHUB_ENV"
+          python3 scripts/create-paddle-sandbox-config-v1.py --output "$STAGE/checkout-config.v1.json" >/dev/null
+          python3 - "$STAGE/checkout-config.v1.json" <<'PY'
+          import json,os,sys,stat
+          from pathlib import Path
+          source=json.loads(Path("checkout-config.v1.json").read_text())
+          stage=json.loads(Path(sys.argv[1]).read_text())
+          assert source["enabled"] is False and source["provider"]=="UNBOUND"
+          assert stage["enabled"] is True and stage["provider"]=="PADDLE"
+          assert stage["environment"]=="sandbox" and stage["sandbox_test_purchase_only"] is True
+          assert stage["production_authorization"]=="DENIED"
+          assert stage["paddle"]["client_side_token"]==os.environ["FEEDHEALTH_PADDLE_SANDBOX_CLIENT_TOKEN"]
+          assert stage["paddle"]["price_id"]==os.environ["FEEDHEALTH_PADDLE_SANDBOX_PRICE_ID"]
+          assert stage["paddle"]["product_id"]==os.environ["FEEDHEALTH_PADDLE_SANDBOX_PRODUCT_ID"]
+          assert stat.S_IMODE(Path(sys.argv[1]).stat().st_mode)==0o600
+          print("REAL_PADDLE_SANDBOX_ACCOUNT_BINDING=PASS")
+          print("LIVE_PAYMENT_AUTHORITY=UNCHANGED_DENIED")
+          PY
+
+      - name: Test ephemeral local runtime without provider mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp Dockerfile nginx.conf index.html app.js first-payment.js first-payment.css first-payment-offer.v1.json styles.css collector.css privacy.html terms.html contact.html robots.txt sitemap.xml "$STAGE_DIR/"
+          docker build --quiet -t feedhealth-sandbox-ephemeral:ci "$STAGE_DIR" >/dev/null
+          docker run -d --rm --name feedhealth-sandbox-ephemeral-ci -p 127.0.0.1:18091:8080 feedhealth-sandbox-ephemeral:ci >/dev/null
+          trap 'docker stop feedhealth-sandbox-ephemeral-ci >/dev/null 2>&1 || true; rm -rf "$STAGE_DIR"' EXIT
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:18091/healthz >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS -o /dev/null http://127.0.0.1:18091/healthz
+          curl -fsS http://127.0.0.1:18091/checkout-config.v1.json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["provider"]=="PADDLE" and d["environment"]=="sandbox" and d["production_authorization"]=="DENIED"; print("ISOLATED_SANDBOX_HTTP_CONFIG=PASS")'
+          curl -fsS -o /dev/null http://127.0.0.1:18091/
+          curl -fsSI http://127.0.0.1:18091/ | grep -qi 'x-robots-tag: noindex'
+          echo "PADDLE_SANDBOX_EPHEMERAL_STATIC_GATE=PASS"
+          echo "NO_SANDBOX_TRANSACTION_OR_REPORT_DELIVERY_ASSERTED"
