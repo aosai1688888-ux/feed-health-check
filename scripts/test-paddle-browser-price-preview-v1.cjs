@@ -61,6 +61,45 @@ const { chromium } = require("playwright");
     });
     assert.equal(result, "PRICE_PREVIEW_READY", "Paddle price API preflight not yet verified: " + result);
     console.log("REAL_PROVIDER_PADDLE_SANDBOX_PRICE_PREVIEW=PASS");
+
+    // Checkout CTA is deliberately HIDDEN until the free diagnostic results
+    // are shown. Use the real manual-input browser workflow rather than
+    // changing hidden attributes or triggering a synthetic click.
+    const checkoutPage = await browser.newPage();
+    await checkoutPage.goto(source, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await checkoutPage.locator("#manual-panel summary").click();
+    const syntheticShopifyProducts = JSON.stringify({products: [{
+      id: "SYNTHETIC_NON_CUSTOMER_FIXTURE", title: "Example Art Print",
+      body_html: "<p>Synthetic product description for isolated QA.</p>",
+      vendor: "Sandbox Fixture", product_type: "Decor",
+      images: [{ src: "https://example.invalid/image.jpg", alt: "Sample art print" }],
+      variants: [{ id: "SYNTHETIC_VARIANT", sku: "SYNTH-QA-001", price: "49.00" }]
+    }]});
+    await checkoutPage.locator("#manual-json").fill(syntheticShopifyProducts);
+    await checkoutPage.locator("#manual-button").click();
+    await checkoutPage.locator("#results").waitFor({ state: "visible", timeout: 12000 });
+    await checkoutPage.locator("#buy-diagnosis").waitFor({ state: "visible", timeout: 12000 });
+    await checkoutPage.locator("#buy-diagnosis").click();
+    try {
+      await checkoutPage.waitForFunction(
+        () => Array.from(document.querySelectorAll("iframe"))
+          .some(frame => /paddle/i.test(frame.getAttribute("src") || "")),
+        null, { timeout: 30000 }
+      );
+    } catch {
+      const diagnostic = await checkoutPage.evaluate(() => ({
+        scanVisible: document.querySelector("#results")?.hidden === false,
+        buyVisible: !!document.querySelector("#buy-diagnosis")?.getClientRects().length,
+        status: (document.querySelector("#checkout-state")?.textContent || "").slice(0, 140),
+        frameCount: document.querySelectorAll("iframe").length,
+        paddleFrameCount: Array.from(document.querySelectorAll("iframe"))
+          .filter(f => /paddle/i.test(f.getAttribute("src") || "")).length
+      }));
+      console.error("SANDBOX_CHECKOUT_OVERLAY_DIAGNOSTIC=" + JSON.stringify(diagnostic));
+      throw Error("PADDLE_SANDBOX_OVERLAY_NOT_OBSERVED");
+    }
+    console.log("PADDLE_SANDBOX_REAL_SCAN_TO_CHECKOUT_OVERLAY=PASS");
+    await checkoutPage.close();
     console.log("TEST_CARD_NOT_USED=TRUE");
     console.log("PAYMENT_COMPLETE_NOT_CLAIMED=TRUE");
     console.log("PAID_AI_DELIVERY_NOT_CLAIMED=TRUE");
