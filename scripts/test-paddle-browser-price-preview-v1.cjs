@@ -79,26 +79,25 @@ const { chromium } = require("playwright");
     await checkoutPage.locator("#manual-button").click();
     await checkoutPage.locator("#results").waitFor({ state: "visible", timeout: 12000 });
     await checkoutPage.locator("#buy-diagnosis").waitFor({ state: "visible", timeout: 12000 });
+    await checkoutPage.locator("#diagnosis-delivery-email").fill("sandbox-review@example.invalid");
+    await checkoutPage.locator("#diagnosis-buyer-consent").check();
     await checkoutPage.locator("#buy-diagnosis").click();
-    try {
-      await checkoutPage.waitForFunction(
-        () => Array.from(document.querySelectorAll("iframe"))
-          .some(frame => /paddle/i.test(frame.getAttribute("src") || "")),
-        null, { timeout: 30000 }
-      );
-    } catch {
-      const diagnostic = await checkoutPage.evaluate(() => ({
-        scanVisible: document.querySelector("#results")?.hidden === false,
-        buyVisible: !!document.querySelector("#buy-diagnosis")?.getClientRects().length,
-        status: (document.querySelector("#checkout-state")?.textContent || "").slice(0, 140),
-        frameCount: document.querySelectorAll("iframe").length,
-        paddleFrameCount: Array.from(document.querySelectorAll("iframe"))
-          .filter(f => /paddle/i.test(f.getAttribute("src") || "")).length
-      }));
-      console.error("SANDBOX_CHECKOUT_OVERLAY_DIAGNOSTIC=" + JSON.stringify(diagnostic));
-      throw Error("PADDLE_SANDBOX_OVERLAY_NOT_OBSERVED");
-    }
-    console.log("PADDLE_SANDBOX_REAL_SCAN_TO_CHECKOUT_OVERLAY=PASS");
+    // CI has genuine Paddle price credentials but deliberately NO authorized
+    // same-origin intake or delivery service. Verify browser does NOT open
+    // a payment overlay that would be impossible to fulfill.
+    await checkoutPage.waitForFunction(
+      () => (document.querySelector("#checkout-state")?.textContent || "")
+        .includes("withheld"),
+      null, { timeout: 12000 }
+    );
+    const blocked = await checkoutPage.evaluate(() => ({
+      status: (document.querySelector("#checkout-state")?.textContent || ""),
+      paddleFrames: Array.from(document.querySelectorAll("iframe"))
+        .filter(f => /paddle/i.test(f.getAttribute("src") || "")).length
+    }));
+    assert.match(blocked.status,/evidence, consent or verified delivery intake is unavailable/);
+    assert.equal(blocked.paddleFrames,0,"unbound checkout opened despite absent delivery intake");
+    console.log("PADDLE_SANDBOX_REAL_SCAN_TO_PAYMENT_DENY_WITHOUT_INTAKE=PASS");
     await checkoutPage.close();
     console.log("TEST_CARD_NOT_USED=TRUE");
     console.log("PAYMENT_COMPLETE_NOT_CLAIMED=TRUE");
