@@ -9,10 +9,30 @@ const { chromium } = require("playwright");
     const source = process.env.FEEDHEALTH_SANDBOX_SMOKE_URL || "http://127.0.0.1:18091/";
     assert.match(source, /^http:\/\/127\.0\.0\.1:\d+\/$/);
     await page.goto(source, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForFunction(
-      () => document.querySelector("#buy-diagnosis") !== null,
-      { timeout: 30000 }
-    );
+    try {
+      await page.waitForFunction(
+        () => document.querySelector("#buy-diagnosis") !== null,
+        null, { timeout: 12000 }
+      );
+    } catch {
+      const status = await page.evaluate(async () => {
+        const [offer, config] = await Promise.all([
+          fetch("/first-payment-offer.v1.json").then(r => r.status).catch(() => 0),
+          fetch("/checkout-config.v1.json").then(r => r.status).catch(() => 0)
+        ]);
+        return {
+          panelExists: !!document.querySelector(".cta-panel"),
+          buttonExists: !!document.querySelector("#buy-diagnosis"),
+          appLoaded: typeof initializeFirstPayment === "function",
+          domReady: document.readyState,
+          offerHttp: offer,
+          checkoutHttp: config,
+          scripts: Array.from(document.scripts).map(x => x.getAttribute("src")).filter(Boolean)
+        };
+      });
+      console.error("FEED_SANDBOX_BROWSER_DOM_DIAGNOSTIC=" + JSON.stringify(status));
+      throw Error("BUY_BUTTON_NOT_RENDERED");
+    }
     const result = await page.evaluate(async () => {
       const config = await fetch("/checkout-config.v1.json", { cache: "no-store" }).then(r => r.json());
       if (!isSandboxPaddleCheckout(config)) return "CANDIDATE_CONFIG_REJECTED";
