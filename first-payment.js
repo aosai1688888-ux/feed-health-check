@@ -115,7 +115,7 @@ function loadSandboxPaddle() {
 // The current production static site has no such endpoint: fail CLOSED.
 async function reservePaidDiagnosisBeforeCheckout(config, checkoutRef, email, consent) {
   if (!consent || typeof email !== "string"
-      || !/^[^\\s@]{1,64}@[^\\s@]{1,190}\\.[A-Za-z]{2,40}$/.test(email)
+      || !/^[^\s@]{1,64}@[^\s@]{1,190}\.[A-Za-z]{2,40}$/.test(email)
       || typeof checkoutRef !== "string" || !/^[0-9a-f-]{20,80}$/i.test(checkoutRef)
       || config?.fulfillment?.mode !== "AUTOMATIC_AI_ONLY"
       || config?.fulfillment?.status !== "VERIFIED_READY"
