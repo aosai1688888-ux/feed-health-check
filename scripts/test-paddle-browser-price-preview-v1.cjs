@@ -61,6 +61,27 @@ const { chromium } = require("playwright");
     });
     assert.equal(result, "PRICE_PREVIEW_READY", "Paddle price API preflight not yet verified: " + result);
     console.log("REAL_PROVIDER_PADDLE_SANDBOX_PRICE_PREVIEW=PASS");
+    // Use a FRESH page so Paddle Initialize has not already been called by
+    // PricePreview. Clicking buy must open a Sandbox overlay, but we STOP
+    // before card entry or transaction completion.
+    const checkoutPage = await browser.newPage();
+    await checkoutPage.goto(source, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await checkoutPage.locator("#buy-diagnosis").waitFor({ timeout: 20000 });
+    await checkoutPage.locator("#buy-diagnosis").click();
+    await checkoutPage.waitForFunction(
+      () => Array.from(document.querySelectorAll("iframe"))
+        .some(frame => /paddle/i.test(frame.getAttribute("src") || "")),
+      null, { timeout: 25000 }
+    );
+    const state = await checkoutPage.evaluate(() => ({
+      status: document.querySelector("#checkout-state")?.textContent || "",
+      paddleFrames: Array.from(document.querySelectorAll("iframe"))
+        .filter(frame => /paddle/i.test(frame.getAttribute("src") || "")).length
+    }));
+    assert.ok(state.paddleFrames > 0);
+    assert.match(state.status, /Opening Paddle Sandbox/);
+    console.log("REAL_PROVIDER_PADDLE_SANDBOX_CHECKOUT_OVERLAY=PASS");
+    await checkoutPage.close();
     console.log("TEST_CARD_NOT_USED=TRUE");
     console.log("PAYMENT_COMPLETE_NOT_CLAIMED=TRUE");
     console.log("PAID_AI_DELIVERY_NOT_CLAIMED=TRUE");
