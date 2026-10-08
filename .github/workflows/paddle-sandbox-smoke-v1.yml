@@ -83,4 +83,8 @@ jobs:
           curl -fsS -o /dev/null http://127.0.0.1:18091/
           curl -fsSI http://127.0.0.1:18091/ | grep -qi 'x-robots-tag: noindex'
           echo "PADDLE_SANDBOX_EPHEMERAL_STATIC_GATE=PASS"
+          # A genuine provider PRICE PREVIEW via Paddle.js/Chromium; never open checkout or charge.
+          npm install --no-save --no-package-lock --ignore-scripts playwright@1.55.0 >/dev/null
+          npx playwright install chromium >/dev/null
+          FEEDHEALTH_SANDBOX_SMOKE_URL=http://127.0.0.1:18091/ node scripts/test-paddle-browser-price-preview-v1.cjs
           echo "NO_SANDBOX_TRANSACTION_OR_REPORT_DELIVERY_ASSERTED"
