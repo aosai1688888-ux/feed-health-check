@@ -70,4 +70,57 @@ test("invalid source cannot even load checkout library",async()=>{
   await assert.rejects(vm.runInContext('openSandboxPaddleCheckout(invalid,"NO")',c));
   assert.deepEqual(loads,[]);
 });
+test("buyer checkout registration fails closed unless evidence, consent and trusted server receipt exist",async()=>{
+  const {c}=setup();
+  c.config=sample();
+  c.config.fulfillment={mode:"AUTOMATIC_AI_ONLY",status:"VERIFIED_READY",
+                        intake_path:"/v1/feedhealth/checkout-intents"};
+  c.ref="b89a7408-51de-4395-aeed-12bf406c9437";
+  c.feedHealthBuyerEvidenceSnapshotV1=()=>({
+    schema:"feedhealth.buyer_evidence_snapshot.v1",source_kind:"BUYER_SUPPLIED_JSON",
+    channel:"google",products:[{id:"p1",title:"Test product"}]
+  });
+  let calls=0;
+  c.fetch=async(path,opts)=>{
+    calls++;
+    assert.equal(path,"/v1/feedhealth/checkout-intents");
+    assert.equal(opts.method,"POST");
+    assert.equal(opts.credentials,"same-origin");
+    assert.equal(opts.headers["Idempotency-Key"],c.ref);
+    assert.equal(JSON.parse(opts.body).delivery_email,"buyer@example.com");
+    return {status:201,json:async()=>({
+      schema:"feedhealth.checkout_intent_receipt.v1",decision:"ACCEPTED",
+      checkout_ref:c.ref,ai_delivery_authorized_after_verified_payment:true
+    })};
+  };
+  const check=()=>vm.runInContext('reservePaidDiagnosisBeforeCheckout(config,ref,"buyer@example.com",true)',c);
+  await check();
+  assert.equal(calls,1);
+  await assert.rejects(vm.runInContext('reservePaidDiagnosisBeforeCheckout(config,ref,"buyer@example.com",false)',c));
+  await assert.rejects(vm.runInContext('reservePaidDiagnosisBeforeCheckout(config,ref,"INVALID",true)',c));
+  assert.equal(calls,1);
+  c.feedHealthBuyerEvidenceSnapshotV1=()=>null;
+  await assert.rejects(check());
+  assert.equal(calls,1);
+  c.feedHealthBuyerEvidenceSnapshotV1=()=>({schema:"feedhealth.buyer_evidence_snapshot.v1",
+    products:[{id:"1"}]});
+  c.config.fulfillment.intake_path="https://evil.invalid/collect";
+  await assert.rejects(check());
+  assert.equal(calls,1);
+  c.config.fulfillment.intake_path="/v1/feedhealth/checkout-intents";
+  c.fetch=async()=>({status:201,json:async()=>({decision:"ACCEPTED",
+    checkout_ref:c.ref,ai_delivery_authorized_after_verified_payment:true})});
+  await assert.rejects(check()); // missing schema: no assertion of provider trust
+  c.fetch=async()=>({status:503,json:async()=>({})});
+  await assert.rejects(check()); // provider or intake outage denies payment
+});
+test("existing storefront analysis retains evidence only for buyer opt-in",()=>{
+  const source=fs.readFileSync(path.join(root,"app.js"),"utf8");
+  assert.match(source,/feedHealthBuyerEvidenceSnapshotV1/);
+  assert.match(source,/latestPaidDiagnosisSource = null/);
+  assert.match(source,/capturePaidDiagnosisSource\(products, "BUYER_SUPPLIED_JSON"\)/);
+  assert.match(source,/capturePaidDiagnosisSource\(products, "PUBLIC_STOREFRONT"\)/);
+  assert.ok(!source.includes("localStorage.setItem"));
+});
+
 console.log("FEEDHEALTH_PADDLE_SANDBOX_CONTRACT=PASS");
