@@ -41,10 +41,20 @@ const { chromium } = require("playwright");
         paddle.Environment.set("sandbox");
         paddle.Initialize({ token: config.paddle.client_side_token });
         const preview = await paddle.PricePreview({
-          items: [{ priceId: config.paddle.price_id, quantity: 1 }]
+          items: [{ priceId: config.paddle.price_id, quantity: 1 }],
+          address: { countryCode: "US" }
         });
-        if (preview && preview.data && preview.data.details && preview.data.details.totals) return "PRICE_PREVIEW_READY";
-        return "PRICE_PREVIEW_UNEXPECTED_SHAPE";
+        // PricePreview has LINE ITEMS, not transaction-level grand totals.
+        // Verify the actual catalog's product, price, 4900-cent USD unit amount
+        // and non-recurring billingCycle == null. Do not trust local label only.
+        const lines = preview?.data?.details?.lineItems;
+        if (!Array.isArray(lines) || lines.length !== 1) return "PRICE_PREVIEW_LINE_ITEM_SHAPE_UNEXPECTED";
+        const price = lines[0]?.price;
+        if (!price || price.id !== config.paddle.price_id) return "PRICE_ID_MISMATCH";
+        if (price.productId !== config.paddle.product_id) return "PRODUCT_ID_MISMATCH";
+        if (price.unitPrice?.currencyCode !== "USD" || String(price.unitPrice?.amount) !== "4900") return "PRICE_CENTS_OR_CURRENCY_MISMATCH";
+        if (price.billingCycle != null || price.trialPeriod != null) return "RECURRING_OR_TRIAL_NOT_PERMITTED";
+        return "PRICE_PREVIEW_READY";
       } catch {
         return "PADDLE_BROWSER_OR_PROVIDER_PREVIEW_FAILED";
       }
