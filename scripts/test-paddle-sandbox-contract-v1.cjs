@@ -143,6 +143,23 @@ test("only original server-signed payment and bound report allow browser deliver
   })});
   const success=await check();
   assert.equal(success.report.summary,"Fixture only.");
+  // Restored browser tabs send no persistent checkout-ref; server's
+  // HttpOnly cookie is authoritative and no JS bearer exists.
+  c.paidSession={schema:"feedhealth.client_report_session.v1",session_mode:"HTTP_ONLY_COOKIE"};
+  c.fetch=async(_path,options)=>{
+    assert.deepEqual(JSON.parse(options.body),{});
+    return {status:200,json:async()=>({
+      schema:"feedhealth.authorized_report_delivery.v1",
+      checkout_ref:"b89a7408-51de-4395-aeed-12bf406c9437",
+      delivery_mode:"AUTHORIZED_BUYER_PULL",report_sha256:"b".repeat(64),
+      report:{schema:"feedhealth.ai_diagnosis_report.v1",
+        checkout_ref:"b89a7408-51de-4395-aeed-12bf406c9437",
+        summary:"Cookie-bound report restored."}
+    })};
+  };
+  assert.equal((await check()).report.summary,"Cookie-bound report restored.");
+  assert.ok(!source.includes("sessionStorage"));
+
   assert.ok(!source.includes("sessionStorage.setItem(\"feedhealth_report_token"));
   c.fetch=async()=>({status:200,json:async()=>({
     schema:"feedhealth.authorized_report_delivery.v1",
