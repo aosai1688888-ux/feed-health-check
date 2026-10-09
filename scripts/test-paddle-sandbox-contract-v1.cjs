@@ -90,7 +90,8 @@ test("buyer checkout registration fails closed unless evidence, consent and trus
     assert.equal(JSON.parse(opts.body).delivery_email,"buyer@example.com");
     return {status:201,json:async()=>({
       schema:"feedhealth.checkout_intent_receipt.v1",decision:"ACCEPTED",
-      checkout_ref:c.ref,ai_delivery_authorized_after_verified_payment:true
+      checkout_ref:c.ref,ai_delivery_authorized_after_verified_payment:true,
+      session_mode:"HTTP_ONLY_COOKIE"
     })};
   };
   const check=()=>vm.runInContext('reservePaidDiagnosisBeforeCheckout(config,ref,"buyer@example.com",true)',c);
@@ -120,14 +121,14 @@ test("only original server-signed payment and bound report allow browser deliver
   c.config.fulfillment={status:"VERIFIED_READY",report_path:"/v1/feedhealth/reports/read"};
   c.paidSession={schema:"feedhealth.client_report_session.v1",
     checkout_ref:"b89a7408-51de-4395-aeed-12bf406c9437",
-    delivery_token:"a".repeat(64)};
+    session_mode:"HTTP_ONLY_COOKIE"};
   let network=0;
   c.fetch=async(path,options)=>{
     network++;
     assert.equal(path,"/v1/feedhealth/reports/read");
     assert.equal(options.method,"POST");
     assert.equal(options.credentials,"same-origin");
-    assert.equal(JSON.parse(options.body).delivery_token,"a".repeat(64));
+    assert.deepEqual(JSON.parse(options.body),{checkout_ref:c.paidSession.checkout_ref});
     return {status:409};
   };
   const check=()=>vm.runInContext("requestSignedPaidReport(config,paidSession)",c);
@@ -142,6 +143,7 @@ test("only original server-signed payment and bound report allow browser deliver
   })});
   const success=await check();
   assert.equal(success.report.summary,"Fixture only.");
+  assert.ok(!source.includes("sessionStorage.setItem(\"feedhealth_report_token"));
   c.fetch=async()=>({status:200,json:async()=>({
     schema:"feedhealth.authorized_report_delivery.v1",
     checkout_ref:"wrong-checkout",delivery_mode:"AUTHORIZED_BUYER_PULL",
