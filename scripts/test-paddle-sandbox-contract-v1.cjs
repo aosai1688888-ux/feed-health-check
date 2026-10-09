@@ -161,6 +161,9 @@ test("only original server-signed payment and bound report allow browser deliver
   assert.ok(!source.includes("sessionStorage"));
 
   assert.ok(!source.includes("sessionStorage.setItem(\"feedhealth_report_token"));
+  c.paidSession={schema:"feedhealth.client_report_session.v1",
+    checkout_ref:"b89a7408-51de-4395-aeed-12bf406c9437",
+    session_mode:"HTTP_ONLY_COOKIE"};
   c.fetch=async()=>({status:200,json:async()=>({
     schema:"feedhealth.authorized_report_delivery.v1",
     checkout_ref:"wrong-checkout",delivery_mode:"AUTHORIZED_BUYER_PULL",
