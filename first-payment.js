@@ -152,7 +152,9 @@ async function reservePaidDiagnosisBeforeCheckout(config, checkoutRef, email, co
   if (receipt?.schema !== "feedhealth.checkout_intent_receipt.v1"
       || receipt?.decision !== "ACCEPTED"
       || receipt?.checkout_ref !== checkoutRef
-      || receipt?.ai_delivery_authorized_after_verified_payment !== true) {
+      || receipt?.ai_delivery_authorized_after_verified_payment !== true
+      || receipt?.session_mode !== "HTTP_ONLY_COOKIE"
+      || Object.hasOwn(receipt,"delivery_token")) {
     throw new Error("TRUSTED_DIAGNOSIS_RECEIPT_MISMATCH");
   }
   return receipt;
@@ -170,14 +172,13 @@ async function requestSignedPaidReport(config, session) {
       || config.fulfillment.report_path !== "/v1/feedhealth/reports/read"
       || !session || session.schema !== "feedhealth.client_report_session.v1"
       || !/^[0-9a-f-]{36}$/i.test(session.checkout_ref)
-      || !/^[a-f0-9]{64}$/.test(session.delivery_token)) {
+      || session.session_mode !== "HTTP_ONLY_COOKIE") {
     throw new Error("BUYER_REPORT_DELIVERY_NOT_AUTHORIZED");
   }
   const response=await fetch(config.fulfillment.report_path,{
     method:"POST",credentials:"same-origin",redirect:"error",cache:"no-store",
     headers:{"Content-Type":"application/json","Accept":"application/json"},
-    body:JSON.stringify({checkout_ref:session.checkout_ref,
-                         delivery_token:session.delivery_token})
+    body:JSON.stringify({checkout_ref:session.checkout_ref})
   });
   // Payment not yet signed, or AI retry still in progress: do not leak state.
   if ([202,404,409,425,503].includes(response.status)) return null;
@@ -231,6 +232,7 @@ async function pollSignedPaymentAndReport(config) {
         showAuthorizedReport(receipt);
         if(status) status.textContent="Your AI diagnosis has been generated and is ready for secure download.";
         authorizedReportSession=null;
+        try { globalThis.sessionStorage?.removeItem("feedhealth_checkout_ref_v1"); } catch {}
         return;
       }
       if(status) status.textContent="Waiting for server-verified payment and automatic AI diagnosis. Browser checkout events are not proof of payment.";
@@ -369,14 +371,16 @@ function renderOffer(panel, offer, checkout) {
         const email = document.getElementById("diagnosis-delivery-email")?.value || "";
         const consent = document.getElementById("diagnosis-buyer-consent")?.checked === true;
         const reservation=await reservePaidDiagnosisBeforeCheckout(checkout, checkoutRef, email, consent);
-        const bearer=String(reservation.delivery_token||"");
-        if (!/^[a-f0-9]{64}$/.test(bearer)) throw new Error("BUYER_REPORT_ACCESS_MISSING");
+        if (reservation.session_mode!=="HTTP_ONLY_COOKIE" || Object.hasOwn(reservation,"delivery_token"))
+          throw new Error("BUYER_HTTPONLY_REPORT_SESSION_REQUIRED");
         authorizedReportSession={schema:"feedhealth.client_report_session.v1",
-          checkout_ref:checkoutRef,delivery_token:bearer};
+          checkout_ref:checkoutRef,session_mode:"HTTP_ONLY_COOKIE"};
+        try { globalThis.sessionStorage?.setItem("feedhealth_checkout_ref_v1",checkoutRef); } catch {}
         try {
           await openSandboxPaddleCheckout(checkout, checkoutRef);
         } catch (error) {
           authorizedReportSession=null;
+          try { globalThis.sessionStorage?.removeItem("feedhealth_checkout_ref_v1"); } catch {}
           throw error;
         }
       } catch {
@@ -418,6 +422,18 @@ async function initializeFirstPayment() {
   }
 
   renderOffer(panel, offer, checkout);
+  // An HttpOnly secure cookie, not JavaScript, holds the paid-report bearer.
+  // Session storage contains only the non-secret order UUID for tab recovery.
+  if (checkout?.fulfillment?.status==="VERIFIED_READY") {
+    try {
+      const ref=globalThis.sessionStorage?.getItem("feedhealth_checkout_ref_v1");
+      if (typeof ref==="string" && /^[a-f0-9-]{36}$/.test(ref)) {
+        authorizedReportSession={schema:"feedhealth.client_report_session.v1",
+          checkout_ref:ref,session_mode:"HTTP_ONLY_COOKIE"};
+        void pollSignedPaymentAndReport(checkout);
+      }
+    } catch {}
+  }
 
   const results = document.getElementById("results");
   let resultSeen = false;
