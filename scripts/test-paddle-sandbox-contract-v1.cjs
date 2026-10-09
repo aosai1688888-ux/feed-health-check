@@ -114,6 +114,57 @@ test("buyer checkout registration fails closed unless evidence, consent and trus
   c.fetch=async()=>({status:503,json:async()=>({})});
   await assert.rejects(check()); // provider or intake outage denies payment
 });
+test("only original server-signed payment and bound report allow browser delivery",async()=>{
+  const {c}=setup();
+  c.config=sample();
+  c.config.fulfillment={status:"VERIFIED_READY",report_path:"/v1/feedhealth/reports/read"};
+  c.paidSession={schema:"feedhealth.client_report_session.v1",
+    checkout_ref:"b89a7408-51de-4395-aeed-12bf406c9437",
+    delivery_token:"a".repeat(64)};
+  let network=0;
+  c.fetch=async(path,options)=>{
+    network++;
+    assert.equal(path,"/v1/feedhealth/reports/read");
+    assert.equal(options.method,"POST");
+    assert.equal(options.credentials,"same-origin");
+    assert.equal(JSON.parse(options.body).delivery_token,"a".repeat(64));
+    return {status:409};
+  };
+  const check=()=>vm.runInContext("requestSignedPaidReport(config,paidSession)",c);
+  assert.equal(await check(),null);
+  assert.equal(network,1);
+  c.fetch=async()=>({status:200,json:async()=>({
+    schema:"feedhealth.authorized_report_delivery.v1",
+    checkout_ref:c.paidSession.checkout_ref,delivery_mode:"AUTHORIZED_BUYER_PULL",
+    report_sha256:"b".repeat(64),
+    report:{schema:"feedhealth.ai_diagnosis_report.v1",
+      checkout_ref:c.paidSession.checkout_ref,summary:"Fixture only."}
+  })});
+  const success=await check();
+  assert.equal(success.report.summary,"Fixture only.");
+  c.fetch=async()=>({status:200,json:async()=>({
+    schema:"feedhealth.authorized_report_delivery.v1",
+    checkout_ref:"wrong-checkout",delivery_mode:"AUTHORIZED_BUYER_PULL",
+    report_sha256:"b".repeat(64),
+    report:{schema:"feedhealth.ai_diagnosis_report.v1",checkout_ref:"wrong-checkout"}
+  })});
+  await assert.rejects(check()); // cannot deliver another buyer's report
+  c.config.fulfillment.report_path="https://evil.invalid/collect";
+  await assert.rejects(check()); // no cross-origin bearer exfiltration
+});
+test("browser checkout completed event only wakes server verification",async()=>{
+  const initialized=[];
+  const paddle={Environment:{set(){}},Initialize:x=>initialized.push(x),
+    Checkout:{open(){} }};
+  const {c}=setup(paddle);
+  c.config=sample();
+  await vm.runInContext('openSandboxPaddleCheckout(config,"REF_1")',c);
+  assert.equal(typeof initialized[0].eventCallback,"function");
+  // No authorizedReportSession: event is NOT a receipt and cannot deliver.
+  initialized[0].eventCallback({name:"checkout.completed"});
+  assert.ok(!source.includes('postBuyerAction("PAYMENT_SUCCEEDED"'));
+  assert.ok(!source.includes("localStorage"));
+});
 test("existing storefront analysis retains evidence only for buyer opt-in",()=>{
   const source=fs.readFileSync(path.join(root,"app.js"),"utf8");
   assert.match(source,/feedHealthBuyerEvidenceSnapshotV1/);
