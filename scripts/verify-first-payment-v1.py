@@ -43,7 +43,14 @@ require("localStorage" not in js and "sessionStorage" not in js and "document.co
 for forbidden_field in ('store_url:', 'storefront_url:', 'merchant_url:', 'product_payload:', 'products_json:'):
     require(forbidden_field not in js, f"FIRST_PAYMENT_TELEMETRY_FIELD_{forbidden_field[:-1].upper()}_ABSENT")
 require('url.protocol !== "https:"' in js, "FIRST_PAYMENT_HTTPS_CHECKOUT_ONLY")
-require('checkoutUrl.searchParams.set("client_reference_id"' in js, "FIRST_PAYMENT_CHECKOUT_REFERENCE_BOUND")
+require(
+    "reservePaidDiagnosisBeforeCheckout(" in js
+    and 'checkout_ref: checkoutRef' in js
+    and '"Idempotency-Key": checkoutRef' in js
+    and 'await reservePaidDiagnosisBeforeCheckout(checkout, checkoutRef, email, consent);' in js
+    and 'Payment is withheld until secure AI report delivery is verified.' in js,
+    "FIRST_PAYMENT_CHECKOUT_REFERENCE_BOUND"
+)
 require("No payment has been taken" in js, "FIRST_PAYMENT_FAIL_CLOSED_USER_MESSAGE")
 
 print("FIRST_PAYMENT_NO_STORE_URL_TELEMETRY=PASS")

@@ -35,6 +35,36 @@ const priorityActionsNode = $("priority-actions");
 const repairSummaryNode = $("repair-summary");
 const intentMessage = $("intent-message");
 let latestReport = null;
+let latestPaidDiagnosisSource = null;
+
+// Buyer evidence remains local until the buyer explicitly consents to a
+// trusted pre-checkout intake. Public scans and pasted product JSON are not
+// passively transmitted from the browser.
+function capturePaidDiagnosisSource(products, sourceKind) {
+  const minimal = products.slice(0, MAX_PRODUCTS).map(product => ({
+    id: String(product?.id ?? "").slice(0, 80),
+    title: String(product?.title ?? "").slice(0, 200),
+    body_html: String(product?.body_html ?? "").slice(0, 2000),
+    vendor: String(product?.vendor ?? "").slice(0, 150),
+    product_type: String(product?.product_type ?? "").slice(0, 150),
+    images: (Array.isArray(product?.images) ? product.images : []).slice(0, 4)
+      .map(image => ({src: String(image?.src ?? "").slice(0, 500),
+                      alt: String(image?.alt ?? "").slice(0, 200)})),
+    variants: (Array.isArray(product?.variants) ? product.variants : []).slice(0, 15)
+      .map(variant => ({
+        sku: String(variant?.sku ?? "").slice(0, 100),
+        price: String(variant?.price ?? "").slice(0, 50),
+        barcode: String(variant?.barcode ?? "").slice(0, 100)
+      }))
+  }));
+  const document = {schema: "feedhealth.buyer_evidence_snapshot.v1",
+    source_kind: sourceKind, channel: targetChannel.value, products: minimal};
+  const serialized = JSON.stringify(document);
+  latestPaidDiagnosisSource = serialized.length <= 120000 ? serialized : null;
+}
+globalThis.feedHealthBuyerEvidenceSnapshotV1 = () =>
+  latestPaidDiagnosisSource ? JSON.parse(latestPaidDiagnosisSource) : null;
+
 
 const CHANNEL_LABELS = {
   google: "Google Merchant / Shopping",
@@ -505,6 +535,7 @@ async function runStorefrontCheck(rawUrl) {
   scanButton.disabled = true;
   setMessage(formMessage, "Reading the public product endpoint once…");
 
+  latestPaidDiagnosisSource = null;
   try {
     const response = await fetch(endpoint, {
       method: "GET",
@@ -516,6 +547,7 @@ async function runStorefrontCheck(rawUrl) {
     if (!response.ok) throw new Error(`The public endpoint returned HTTP ${response.status}.`);
     const payload = await response.json();
     const products = normalizeProducts(payload);
+    capturePaidDiagnosisSource(products, "PUBLIC_STOREFRONT");
     renderReport(auditProducts(products, "public storefront data", targetChannel.value));
     setMessage(formMessage, `Check complete. ${products.length} public products analyzed and prioritized.`, "success");
   } catch (error) {
@@ -546,10 +578,12 @@ storeForm.addEventListener("submit", event => {
 
 manualButton.addEventListener("click", () => {
   setMessage(manualMessage, "");
+  latestPaidDiagnosisSource = null;
   try {
     const parsed = JSON.parse(manualJson.value);
     const products = normalizeProducts(parsed);
     void recordEvent("CHECK_STARTED", { mode: "manual_local_json", channel: targetChannel.value });
+    capturePaidDiagnosisSource(products, "BUYER_SUPPLIED_JSON");
     renderReport(auditProducts(products, "local pasted public/sample JSON", targetChannel.value));
     setMessage(manualMessage, `Local check complete. ${products.length} products analyzed in this tab. The pasted JSON was not included in validation telemetry.`, "success");
   } catch (error) {
