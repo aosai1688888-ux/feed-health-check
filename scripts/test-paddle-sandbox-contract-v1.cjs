@@ -255,7 +255,7 @@ test("Only gated Live Paddle.js opens one price; no sandbox environment, trackin
   assert.equal(opens[0].items[0].quantity,1);
   assert.equal(opens[0].items[0].priceId,c.live.paddle.price_id);
   assert.equal(opens[0].customData.checkout_ref,"b89a7408-51de-4395-aeed-12bf406c9437");
-  assert.equal(opens[0].customData.test_only,undefined);
+  assert.equal(opens[0].customData.test_only,"false");\n  // Group signed Paddle webhook verifier requires exact string "false" in Live.
   assert.equal(JSON.stringify(opens[0]).includes("buyer@example.com"),false);
   c.sandbox=sample();
   await assert.rejects(vm.runInContext('openSandboxPaddleCheckout(sandbox,"REF_2")',c),
