@@ -52,6 +52,23 @@ require(
     "FIRST_PAYMENT_CHECKOUT_REFERENCE_BOUND"
 )
 require("No payment has been taken" in js, "FIRST_PAYMENT_FAIL_CLOSED_USER_MESSAGE")
+pricing = read("pricing.html")
+refunds = read("refund.html")
+terms = read("terms.html")
+privacy = read("privacy.html")
+dockerfile = read("Dockerfile")
+for page, href in (("pricing", "/pricing.html"), ("refund", "/refund.html"), ("terms", "/terms.html"), ("privacy", "/privacy.html")):
+    require(href in index, f"FIRST_PAYMENT_{page.upper()}_INDEX_LINK")
+    require(href in dockerfile or (page in ("terms", "privacy") and f"{page}.html" in dockerfile),
+            f"FIRST_PAYMENT_{page.upper()}_SHIPPED")
+require("US$49" in pricing and "one-time" in pricing.lower() and "not yet available" in pricing.lower(),
+        "FIRST_PAYMENT_PRICING_TRUTHFUL")
+require("paddle.net" in refunds and "www.paddle.com/legal/refund-policy" in refunds,
+        "FIRST_PAYMENT_REFUND_POLICY_LINKED")
+require("not yet live" in terms.lower() and "not yet live" in privacy.lower(),
+        "FIRST_PAYMENT_PAID_POLICY_NOT_FALSE_LIVE")
+require("Paddle" in pricing and "checkout" in pricing.lower(),
+        "FIRST_PAYMENT_PRICE_PAYMENT_BOUNDARY")
 
 print("FIRST_PAYMENT_NO_STORE_URL_TELEMETRY=PASS")
 print("FIRST_PAYMENT_P0B_STATIC_GATE=PASS")
