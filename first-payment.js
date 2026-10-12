@@ -94,6 +94,30 @@ function isSandboxPaddleCheckout(config) {
     && /^pro_[a-z0-9]{20,40}$/.test(settings.product_id || ""));
 }
 
+// A live checkout remains denied unless a separate exact-SHA release has been
+// independently admitted, Paddle Live business/domain verification is complete,
+// and the original same-origin paid-AI intake/receipt/report chain is READY.
+// Public client flags are NOT a payment authority: Group SoR and Paddle's
+// signed provider event remain authoritative for any actual fulfillment.
+function isLivePaddleCheckout(config) {
+  if (!config || config.enabled !== true || config.provider !== "PADDLE"
+      || config.environment !== "production" || config.sandbox_test_purchase_only !== false
+      || config.production_authorization !== "GAEC_GO"
+      || config.merchant_verified !== true || config.checkout_domain_approved !== true
+      || config.public_signed_webhook_verified !== true
+      || config.browser_may_assert_success !== false
+      || config.success_confirmation !== "TRUSTED_SERVER_ONLY"
+      || config.currency !== "USD" || config.price !== 49 || config.checkout_url !== null
+      || config.fulfillment?.mode !== "AUTOMATIC_AI_ONLY"
+      || config.fulfillment?.status !== "VERIFIED_READY"
+      || config.fulfillment?.intake_path !== "/v1/feedhealth/checkout-intents"
+      || config.fulfillment?.report_path !== "/v1/feedhealth/reports/read") return false;
+  const settings=config.paddle;
+  return !!(settings && /^live_[a-zA-Z0-9_]{12,160}$/.test(settings.client_side_token || "")
+    && /^pri_[a-z0-9]{20,40}$/.test(settings.price_id || "")
+    && /^pro_[a-z0-9]{20,40}$/.test(settings.product_id || ""));
+}
+
 let sandboxPaddleLoad;
 function loadSandboxPaddle() {
   if (globalThis.Paddle) return Promise.resolve(globalThis.Paddle);
@@ -120,7 +144,7 @@ async function reservePaidDiagnosisBeforeCheckout(config, checkoutRef, email, co
       || config?.fulfillment?.mode !== "AUTOMATIC_AI_ONLY"
       || config?.fulfillment?.status !== "VERIFIED_READY"
       || config?.fulfillment?.intake_path !== "/v1/feedhealth/checkout-intents"
-      || !isSandboxPaddleCheckout(config)) {
+      || !(isSandboxPaddleCheckout(config) || isLivePaddleCheckout(config))) {
     throw new Error("TRUSTED_DIAGNOSIS_INTAKE_NOT_READY");
   }
   const getEvidence = globalThis.feedHealthBuyerEvidenceSnapshotV1;
@@ -245,33 +269,51 @@ async function pollSignedPaymentAndReport(config) {
   }
 }
 
-let sandboxPaddleInitialized = false;
-async function openSandboxPaddleCheckout(config, checkoutRef) {
-  if (!isSandboxPaddleCheckout(config)) throw new Error("Sandbox payment not authorized");
-  const paddle = await loadSandboxPaddle();
-  if (!sandboxPaddleInitialized) {
-    paddle.Environment.set("sandbox");
+let paddleInitializedEnvironment = null;
+async function openAuthorizedPaddleCheckout(config, checkoutRef) {
+  const sandbox=isSandboxPaddleCheckout(config);
+  const live=isLivePaddleCheckout(config);
+  if (!sandbox && !live) throw new Error("PADDLE_PAYMENT_NOT_AUTHORIZED");
+  const mode=sandbox ? "sandbox" : "production";
+  if (paddleInitializedEnvironment && paddleInitializedEnvironment!==mode)
+    throw new Error("CROSS_ENVIRONMENT_PADDLE_INIT_DENIED");
+  const paddle=await loadSandboxPaddle();
+  if (!paddleInitializedEnvironment) {
+    if (sandbox) paddle.Environment.set("sandbox");
+    // Live uses Paddle's default production environment; do not call
+    // Paddle.Environment.set("sandbox") for any Live token.
     paddle.Initialize({
-      token: config.paddle.client_side_token,
-      eventCallback: event => {
-        // Notification is only a wakeup. Server verifies raw Paddle HMAC first.
-        if (event?.name==="checkout.completed") {
-          void pollSignedPaymentAndReport(config).catch(() => {
+      token:config.paddle.client_side_token,
+      eventCallback:event=>{
+        // A browser callback only wakes a server-verified read; it never
+        // grants report delivery or records a paid transaction.
+        if(event?.name==="checkout.completed") {
+          void pollSignedPaymentAndReport(config).catch(()=>{
             const node=document.getElementById("checkout-state");
-            if(node) node.textContent="Report verification is temporarily unavailable. No browser payment event was trusted.";
+            if(node) node.textContent="Server payment/report verification is unavailable; browser events are not proof of payment.";
           });
         }
       }
     });
-    sandboxPaddleInitialized = true;
+    paddleInitializedEnvironment=mode;
   }
-  // Only a sandbox transaction can be opened here. Browser events, including
-  // checkout.completed, must NEVER grant report access or record paid revenue.
+  const customData={checkout_ref:checkoutRef,offer_ref:"VERIFIED_FEED_DIAGNOSIS"};
+  if(sandbox) customData.test_only="true";
+  // Always one explicit Paddle product price with quantity 1. Never ship
+  // email, raw feed data, report token or buyer PII in Paddle customData.
   paddle.Checkout.open({
-    items: [{ priceId: config.paddle.price_id, quantity: 1 }],
-    customData: { checkout_ref: checkoutRef, offer_ref: "VERIFIED_FEED_DIAGNOSIS", test_only: "true" },
-    settings: { displayMode: "overlay", theme: "light" }
+    items:[{priceId:config.paddle.price_id,quantity:1}],
+    customData,
+    settings:{displayMode:"overlay",theme:"light"}
   });
+}
+async function openSandboxPaddleCheckout(config,checkoutRef) {
+  if(!isSandboxPaddleCheckout(config)) throw new Error("Sandbox payment not authorized");
+  return openAuthorizedPaddleCheckout(config,checkoutRef);
+}
+async function openLivePaddleCheckout(config,checkoutRef) {
+  if(!isLivePaddleCheckout(config)) throw new Error("Live payment not authorized");
+  return openAuthorizedPaddleCheckout(config,checkoutRef);
 }
 
 function renderOffer(panel, offer, checkout) {
@@ -279,7 +321,8 @@ function renderOffer(panel, offer, checkout) {
   const currency = String(offer?.currency ?? checkout?.currency ?? "USD");
   const included = Array.isArray(offer?.included) ? offer.included : [];
   const sandboxReady = isSandboxPaddleCheckout(checkout);
-  const checkoutReady = Boolean(trustedCheckoutUrl(checkout)) || sandboxReady;
+  const liveReady = isLivePaddleCheckout(checkout);
+  const checkoutReady = sandboxReady || liveReady;
 
   panel.classList.add("first-payment-offer");
   panel.innerHTML = `
@@ -287,7 +330,7 @@ function renderOffer(panel, offer, checkout) {
       <div>
         <p class="eyebrow">STEP 03 · VERIFIED DIAGNOSIS</p>
         <h3 id="cta-title">Turn this public scan into a verified repair decision.</h3>
-        <p class="offer-lede">The free scan is a public observation. The planned paid diagnosis uses AI to analyze buyer-provided product data, label evidence strength, and automatically generate a prioritized digital report. Paid delivery is not live yet.</p>
+        <p class="offer-lede">The free scan is a public observation. The planned paid diagnosis uses AI to analyze buyer-provided product data, label evidence strength, and automatically generate a prioritized digital report. ${liveReady ? "Paid AI delivery is enabled for independently admitted production transactions only." : "Paid delivery is not live yet."}</p>
       </div>
       <div class="offer-price" aria-label="Verified Feed Diagnosis price">
         <span>One-time</span>
@@ -331,7 +374,7 @@ function renderOffer(panel, offer, checkout) {
     </div>
     ${checkout?.fulfillment?.status==="VERIFIED_READY" ? '<button id="resume-report" class="button ghost" type="button">Retrieve an existing paid report on this device</button>' : ""}
     <div id="feedhealth-paid-report" role="region" aria-label="Verified paid diagnosis report" hidden></div>
-    <p id="checkout-state" class="intent-message" role="status" aria-live="polite">${sandboxReady ? "Paddle Sandbox test only — no real charge, automatic report fulfillment not yet verified." : (checkoutReady ? "Secure checkout is available." : "Candidate build: secure checkout is intentionally fail-closed until a trusted payment provider is bound.")}</p>
+    <p id="checkout-state" class="intent-message" role="status" aria-live="polite">${sandboxReady ? "Paddle Sandbox test only — no real charge, automatic report fulfillment not yet verified." : (liveReady ? "Live checkout is release-gated; server verification and valid buyer evidence are required before payment." : "Candidate build: secure checkout is intentionally fail-closed until a trusted payment provider is bound.")}</p>
     <p class="offer-footnote">No store changes are made by this purchase. No guarantee of approval, ranking, traffic, ROAS, or sales is made.</p>
   `;
 
@@ -362,8 +405,9 @@ function renderOffer(panel, offer, checkout) {
     });
 
     const sandboxReady = isSandboxPaddleCheckout(checkout);
+    const liveReady = isLivePaddleCheckout(checkout);
     const checkoutUrl = trustedCheckoutUrl(checkout);
-    if (!sandboxReady && !checkoutUrl) {
+    if (!sandboxReady && !liveReady && !checkoutUrl) {
       status.textContent = "Secure checkout is not active on this candidate build. No payment has been taken.";
       status.className = "intent-message warning";
       return;
@@ -376,8 +420,8 @@ function renderOffer(panel, offer, checkout) {
       offer_ref: offer?.sku || "VERIFIED_FEED_DIAGNOSIS",
       checkout_ref: checkoutRef
     });
-    if (sandboxReady) {
-      status.textContent = "Checking trusted diagnosis intake before allowing a Sandbox payment…";
+    if (sandboxReady || liveReady) {
+      status.textContent = "Checking trusted diagnosis intake before permitting Paddle checkout…";
       try {
         const email = document.getElementById("diagnosis-delivery-email")?.value || "";
         const consent = document.getElementById("diagnosis-buyer-consent")?.checked === true;
@@ -387,13 +431,14 @@ function renderOffer(panel, offer, checkout) {
         authorizedReportSession={schema:"feedhealth.client_report_session.v1",
           checkout_ref:checkoutRef,session_mode:"HTTP_ONLY_COOKIE"};
         try {
-          await openSandboxPaddleCheckout(checkout, checkoutRef);
+          if (sandboxReady) await openSandboxPaddleCheckout(checkout, checkoutRef);
+          else await openLivePaddleCheckout(checkout, checkoutRef);
         } catch (error) {
           authorizedReportSession=null;
           throw error;
         }
       } catch {
-        status.textContent = "Sandbox checkout withheld: buyer evidence, consent or verified delivery intake is unavailable. No payment has been taken.";
+        status.textContent = "Paddle checkout withheld: buyer evidence, consent or verified delivery intake is unavailable. No payment has been taken.";
         status.className = "intent-message warning";
       }
       return;
