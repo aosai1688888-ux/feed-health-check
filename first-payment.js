@@ -298,7 +298,7 @@ async function openAuthorizedPaddleCheckout(config, checkoutRef) {
     paddleInitializedEnvironment=mode;
   }
   const customData={checkout_ref:checkoutRef,offer_ref:"VERIFIED_FEED_DIAGNOSIS"};
-  if(sandbox) customData.test_only="true";
+  customData.test_only = sandbox ? "true" : "false";
   // Always one explicit Paddle product price with quantity 1. Never ship
   // email, raw feed data, report token or buyer PII in Paddle customData.
   paddle.Checkout.open({
