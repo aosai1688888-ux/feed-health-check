@@ -196,4 +196,70 @@ test("existing storefront analysis retains evidence only for buyer opt-in",()=>{
   assert.ok(!source.includes("localStorage.setItem"));
 });
 
+
+function liveSample(){
+  const config=sample();
+  config.environment="production";
+  config.sandbox_test_purchase_only=false;
+  config.production_authorization="GAEC_GO";
+  config.merchant_verified=true;
+  config.checkout_domain_approved=true;
+  config.public_signed_webhook_verified=true;
+  config.fulfillment={
+    mode:"AUTOMATIC_AI_ONLY",status:"VERIFIED_READY",
+    intake_path:"/v1/feedhealth/checkout-intents",
+    report_path:"/v1/feedhealth/reports/read"
+  };
+  config.paddle.client_side_token="live_"+"0123456789abcdef";
+  return config;
+}
+
+test("Live stays blocked without exact GAEC, merchant, webhook and fulfillment admission",()=>{
+  const {c}=setup();
+  assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(production)+")",c),false);
+  for(const [key,val] of [
+    ["environment","sandbox"],["sandbox_test_purchase_only",true],
+    ["production_authorization","DENIED"],["merchant_verified",false],
+    ["checkout_domain_approved",false],["public_signed_webhook_verified",false],
+    ["enabled",false],["provider","UNBOUND"],["price",50],
+    ["browser_may_assert_success",true],["success_confirmation","BROWSER"],
+    ["checkout_url","https://example.test/"]]){
+      const bad=liveSample();bad[key]=val;
+      assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(bad)+")",c),false,key);
+  }
+  for(const [key,val] of [
+    ["status","NOT_VERIFIED"],["mode","MANUAL"],
+    ["intake_path","https://evil.invalid/data"],["report_path","/wrong/report"]]){
+      const bad=liveSample();bad.fulfillment[key]=val;
+      assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(bad)+")",c),false,key);
+  }
+  for(const [key,val] of [
+    ["client_side_token","test_wrongenv1234567890"],
+    ["price_id","pri_short"],["product_id","pro_short"]]){
+    const bad=liveSample();bad.paddle[key]=val;
+    assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(bad)+")",c),false,key);
+  }
+  assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(liveSample())+")",c),true);
+});
+
+test("Only gated Live Paddle.js opens one price; no sandbox environment, tracking or payment claim",async()=>{
+  const env=[],initialize=[],opens=[];
+  const paddle={Environment:{set:v=>env.push(v)},
+    Initialize:v=>initialize.push(v),Checkout:{open:v=>opens.push(v)}};
+  const {c}=setup(paddle);
+  c.live=liveSample();
+  await vm.runInContext('openLivePaddleCheckout(live,"b89a7408-51de-4395-aeed-12bf406c9437")',c);
+  assert.deepEqual(env,[]);
+  assert.equal(initialize.length,1);
+  assert.equal(opens.length,1);
+  assert.equal(opens[0].items[0].quantity,1);
+  assert.equal(opens[0].items[0].priceId,c.live.paddle.price_id);
+  assert.equal(opens[0].customData.checkout_ref,"b89a7408-51de-4395-aeed-12bf406c9437");
+  assert.equal(opens[0].customData.test_only,undefined);
+  assert.equal(JSON.stringify(opens[0]).includes("buyer@example.com"),false);
+  c.sandbox=sample();
+  await assert.rejects(vm.runInContext('openSandboxPaddleCheckout(sandbox,"REF_2")',c),
+    /CROSS_ENVIRONMENT_PADDLE_INIT_DENIED/);
+});
+
 console.log("FEEDHEALTH_PADDLE_SANDBOX_CONTRACT=PASS");
