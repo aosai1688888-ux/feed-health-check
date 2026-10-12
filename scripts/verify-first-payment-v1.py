@@ -59,7 +59,7 @@ privacy = read("privacy.html")
 dockerfile = read("Dockerfile")
 for page, href in (("pricing", "/pricing.html"), ("refund", "/refund.html"), ("terms", "/terms.html"), ("privacy", "/privacy.html")):
     require(href in index, f"FIRST_PAYMENT_{page.upper()}_INDEX_LINK")
-    require(href in dockerfile or (page in ("terms", "privacy") and f"{page}.html" in dockerfile),
+    require(f"{page}.html" in dockerfile,
             f"FIRST_PAYMENT_{page.upper()}_SHIPPED")
 require("US$49" in pricing and "one-time" in pricing.lower() and "not yet available" in pricing.lower(),
         "FIRST_PAYMENT_PRICING_TRUTHFUL")
