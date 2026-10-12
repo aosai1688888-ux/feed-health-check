@@ -70,7 +70,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cp Dockerfile nginx.conf index.html app.js first-payment.js first-payment.css first-payment-offer.v1.json styles.css collector.css privacy.html terms.html contact.html robots.txt sitemap.xml "$STAGE_DIR/"
+          cp Dockerfile nginx.conf index.html app.js first-payment.js first-payment.css first-payment-offer.v1.json styles.css collector.css privacy.html terms.html contact.html pricing.html refund.html robots.txt sitemap.xml "$STAGE_DIR/"
           # Only the isolated HTTP localhost smoke fixture may read local JSON over http.
           # Never modify the original production CSP to permit insecure origins.
           python3 - "$STAGE_DIR/nginx.conf" "$STAGE_DIR/index.html" <<'PY_CSP'
