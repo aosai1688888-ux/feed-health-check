@@ -94,7 +94,8 @@ async function button(page,patterns){
      try{
        const j=await response.json();
        reservation={http:response.status(),decision:j.decision,
-         checkout_ref:j.checkout_ref,session_mode:j.session_mode};
+         checkout_ref:j.checkout_ref,session_mode:j.session_mode,
+         error_code:typeof j.error==="string"?j.error.slice(0,80):undefined};
      }catch{reservation={http:response.status()}}
    });
    await page.goto(origin+"/",{waitUntil:"domcontentloaded",timeout:30000});
@@ -166,6 +167,10 @@ async function button(page,patterns){
      console.log("SANDBOX_BROWSER_ERROR_CLASSES="+JSON.stringify(browserErrors));
    }
    assert.ok(reservation,"REAL_ORIGINAL_SOR_RESERVATION_NOT_RECEIVED");
+   console.log("ORIGINAL_SOR_RESERVATION_RESPONSE_CODE="+JSON.stringify({
+     http:reservation.http,error_code:reservation.error_code||null,
+     decision:reservation.decision||null
+   }));
    assert.equal(reservation.http,201,"ORIGINAL_SOR_RESERVATION_FAILED");
    assert.equal(reservation.decision,"ACCEPTED");
    assert.equal(reservation.session_mode,"HTTP_ONLY_COOKIE");
