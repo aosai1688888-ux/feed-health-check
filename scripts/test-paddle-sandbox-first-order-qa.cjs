@@ -75,6 +75,12 @@ async function paddleStepDiagnostic(page,stage){
 async function input(page,selectors,text,name,required){
  for(let attempt=0;attempt<5;attempt++){
    for(const frame of page.frames())for(const selector of selectors){
+     // Never fill the site's buyer email field when the Paddle iframe requires its own.
+     // All input() calls in this function are for the official provider checkout only.
+     let host;try{host=new URL(frame.url()).hostname}catch{continue}
+     if(host!=="sandbox-buy.paddle.com" &&
+        host!=="stripe.com" && !host.endsWith(".stripe.com") &&
+        host!=="stripe.network" && !host.endsWith(".stripe.network"))continue;
      try{
        const el=frame.locator(selector).first();
        if(await el.count()&&await el.isVisible()){
@@ -264,7 +270,7 @@ async function button(page,patterns){
    }
    // Paddle-published test card; not a real or user payment instrument.
    await input(page,["input[type=email]","input[autocomplete=email]",
-     "input[name*=email i]"],"feedhealth@qianwuai.com","EMAIL",false);
+     "input[name*=email i]"],"feedhealth@qianwuai.com","EMAIL",true);
    // Official Paddle Sandbox checkout starts with buyer country/postcode.
    // Stripe card fields are not rendered until this first step completes.
    let countrySelected=false;
