@@ -299,6 +299,27 @@ async function openAuthorizedPaddleCheckout(config, checkoutRef) {
   }
   const customData={checkout_ref:checkoutRef,offer_ref:"VERIFIED_FEED_DIAGNOSIS"};
   customData.test_only = sandbox ? "true" : "false";
+  // Paddle may localize currencies automatically by the buyer's country.
+  // Group SoR's exact-one-time receipt currently accepts USD only. Refuse
+  // checkout if official provider PricePreview is not USD49 for our exact
+  // product/price; the merchant's automatic currency conversion must ALSO
+  // be disabled until separately reviewed multicurrency reconciliation exists.
+  // The preview is only a PRE-CHECK; signed transaction.completed remains
+  // the sole paid receipt and can still be rejected on any mismatch.
+  const preview=await paddle.PricePreview({
+    items:[{priceId:config.paddle.price_id,quantity:1}]
+  });
+  const data=preview?.data;
+  const lines=data?.details?.lineItems;
+  if (data?.currencyCode!=="USD" || !Array.isArray(lines) || lines.length!==1
+      || lines[0]?.price?.id!==config.paddle.price_id
+      || lines[0]?.price?.productId!==config.paddle.product_id
+      || lines[0]?.price?.unitPrice?.currencyCode!=="USD"
+      || String(lines[0]?.price?.unitPrice?.amount)!=="4900"
+      || lines[0]?.price?.billingCycle!=null
+      || lines[0]?.price?.trialPeriod!=null) {
+    throw new Error("PADDLE_PRICE_OR_CURRENCY_NOT_SUPPORTED");
+  }
   // Always one explicit Paddle product price with quantity 1. Never ship
   // email, raw feed data, report token or buyer PII in Paddle customData.
   paddle.Checkout.open({
