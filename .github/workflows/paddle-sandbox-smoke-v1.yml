@@ -1,6 +1,15 @@
 name: FeedHealth Paddle Sandbox Isolated Smoke V1
 
 on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Sandbox QA only: reserve original Group SoR test order and verify Paddle"
+        required: true
+        type: choice
+        options:
+          - overlay_probe
+          - official_test_card
   pull_request:
     branches: [main]
     paths:
@@ -13,11 +22,92 @@ on:
       - 'checkout-config.v1.json'
       - 'scripts/create-paddle-sandbox-config-v1.py'
       - 'scripts/test-paddle-sandbox-contract-v1.cjs'
+      - 'scripts/test-paddle-sandbox-first-order-qa.cjs'
 
 permissions:
   contents: read
 
 jobs:
+  sandbox-qa-source-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - run: |
+          set -euo pipefail
+          node --check scripts/test-paddle-sandbox-first-order-qa.cjs
+          node --test scripts/test-paddle-sandbox-contract-v1.cjs
+          echo "SANDBOX_QA_NO_PAYMENT_CONTRACT=PASS"
+
+  sandbox-qa-official:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    concurrency:
+      group: feedhealth-official-sandbox-qa-one-at-a-time
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Verify original public production checkout remains closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/test-paddle-sandbox-first-order-qa.cjs
+          python3 scripts/verify-first-payment-v1.py
+          python3 - <<'PY'
+          import json,urllib.request
+          url="https://feed.qianwuai.com/checkout-config.v1.json"
+          with urllib.request.urlopen(url,timeout=12) as response:
+              d=json.load(response)
+          assert d.get("enabled") is False and d.get("provider")=="UNBOUND"
+          print("PUBLIC_LIVE_AND_SANDBOX_CHECKOUT_STILL_CLOSED=PASS")
+          PY
+      - name: Generate one isolated official Sandbox QA config from original credentials
+        shell: bash
+        env:
+          FEEDHEALTH_PADDLE_SANDBOX_CLIENT_TOKEN: ${{ secrets.FEEDHEALTH_PADDLE_SANDBOX_CLIENT_TOKEN }}
+          FEEDHEALTH_PADDLE_SANDBOX_PRICE_ID: ${{ vars.FEEDHEALTH_PADDLE_SANDBOX_PRICE_ID }}
+          FEEDHEALTH_PADDLE_SANDBOX_PRODUCT_ID: ${{ vars.FEEDHEALTH_PADDLE_SANDBOX_PRODUCT_ID }}
+          FEEDHEALTH_SANDBOX_QA_ADMITTED: "YES"
+          FEEDHEALTH_SANDBOX_DELIVERY_VERIFIED: "NO"
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 scripts/create-paddle-sandbox-config-v1.py --output "$RUNNER_TEMP/feedhealth-sandbox-qa.json" >/dev/null
+          python3 - "$RUNNER_TEMP/feedhealth-sandbox-qa.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1]))
+          assert d["environment"]=="sandbox" and d["production_authorization"]=="DENIED"
+          assert d["fulfillment_status"]=="SANDBOX_QA_DELIVERY_UNPROVEN"
+          assert d["fulfillment"]["status"]=="SANDBOX_QA_READY"
+          assert d["paddle"]["client_side_token"].startswith("test_")
+          print("ORIGINAL_PROVIDER_SANDBOX_CLIENT_CONFIG_IN_EPHEMERAL_RUNNER=PASS")
+          PY
+      - name: Install isolated browser runner (no artifacts or screenshots uploaded)
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Run one real Paddle Sandbox browser acceptance attempt
+        shell: bash
+        env:
+          FEEDHEALTH_QA_MODE: ${{ inputs.mode }}
+          FEEDHEALTH_QA_CONFIG: ${{ runner.temp }}/feedhealth-sandbox-qa.json
+        run: |
+          set -euo pipefail
+          node scripts/test-paddle-sandbox-first-order-qa.cjs
+      - name: Destroy ephemeral public token copy
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/feedhealth-sandbox-qa.json"
+
   sandbox-smoke:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
