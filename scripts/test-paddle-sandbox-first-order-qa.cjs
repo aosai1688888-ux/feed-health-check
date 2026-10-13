@@ -90,13 +90,18 @@ async function button(page,patterns){
          networkTrace.push({phase:"RESPONSE",path:u.pathname,status:response.status()});
      }catch{}
 
-     if(response.url()!==origin+"/v1/feedhealth/checkout-intents")return;
+     let url;
+     try{url=new URL(response.url())}catch{return}
+     if(url.origin!==origin || url.pathname!=="/v1/feedhealth/checkout-intents")return;
+     const observed={http:response.status()};
+     reservation=observed;
      try{
        const j=await response.json();
-       reservation={http:response.status(),decision:j.decision,
-         checkout_ref:j.checkout_ref,session_mode:j.session_mode,
-         error_code:typeof j.error==="string"?j.error.slice(0,80):undefined};
-     }catch{reservation={http:response.status()}}
+       observed.decision=j.decision;
+       observed.checkout_ref=j.checkout_ref;
+       observed.session_mode=j.session_mode;
+       observed.error_code=typeof j.error==="string"?j.error.slice(0,80):undefined;
+     }catch{observed.parse_failed=true}
    });
    await page.goto(origin+"/",{waitUntil:"domcontentloaded",timeout:30000});
    await page.locator("#buy-diagnosis").waitFor({state:"attached",timeout:15000});
@@ -167,6 +172,7 @@ async function button(page,patterns){
      console.log("SANDBOX_BROWSER_ERROR_CLASSES="+JSON.stringify(browserErrors));
    }
    assert.ok(reservation,"REAL_ORIGINAL_SOR_RESERVATION_NOT_RECEIVED");
+   await page.waitForTimeout(800);
    console.log("ORIGINAL_SOR_RESERVATION_RESPONSE_CODE="+JSON.stringify({
      http:reservation.http,error_code:reservation.error_code||null,
      decision:reservation.decision||null
