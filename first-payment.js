@@ -113,6 +113,11 @@ function isLivePaddleCheckout(config) {
       || config.fulfillment?.intake_path !== "/v1/feedhealth/checkout-intents"
       || config.fulfillment?.report_path !== "/v1/feedhealth/reports/read") return false;
   const settings=config.paddle;
+  // Release authority must verify USD-only seller settings. Otherwise Paddle
+  // automatic FX creates completed non-USD sales rejected by the original
+  // exact-USD Group SoR binding.
+  if(settings?.currency_localization_disabled!==true
+     || settings?.country_price_overrides_absent!==true) return false;
   return !!(settings && /^live_[a-zA-Z0-9_]{12,160}$/.test(settings.client_side_token || "")
     && /^pri_[a-z0-9]{20,40}$/.test(settings.price_id || "")
     && /^pro_[a-z0-9]{20,40}$/.test(settings.product_id || ""));
