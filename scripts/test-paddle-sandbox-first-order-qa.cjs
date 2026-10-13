@@ -309,6 +309,13 @@ async function button(page,patterns){
      /pay now/i,/complete purchase/i,/complete payment/i,
      /purchase/i]),"TEST_CARD_SUBMIT_NOT_FOUND");
    console.log("PADDLE_SANDBOX_TEST_CARD_SUBMITTED=TRUE");
+   // After the actual provider Pay click, distinguish browser-side card rejection
+   // from an accepted checkout awaiting the original signed webhook/AI fulfillment.
+   // Only safe form metadata and HTTP status classifications, never customer/card data.
+   await page.waitForTimeout(8500);
+   await paddleStepDiagnostic(page,"AFTER_PROVIDER_PAY_CLICK");
+   console.log("PADDLE_SANDBOX_PROVIDER_TRANSPORT_POST_PAY="+JSON.stringify(providerTransport));
+   await fields(page);
    let delivered=false;
    const end=Date.now()+210000;
    while(Date.now()<end){
