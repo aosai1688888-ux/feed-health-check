@@ -425,7 +425,8 @@ function renderOffer(panel, offer, checkout) {
     </div>
 
     <div class="offer-evidence-consent">
-      <label for="diagnosis-delivery-email">Email for your automatically generated digital report</label>
+      <label for="diagnosis-delivery-email">Purchase contact email for support and receipt matching</label>
+      <p class="offer-footnote">Your generated report is retrieved securely in this browser. An email containing the report is not currently sent; keep access to this browser until download succeeds.</p>
       <input id="diagnosis-delivery-email" type="email" autocomplete="email" maxlength="254"
         placeholder="buyer@example.com" required />
       <label><input id="diagnosis-buyer-consent" type="checkbox" />
