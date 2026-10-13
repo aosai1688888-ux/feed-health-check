@@ -1,0 +1,191 @@
+# Exact public transport allowlist; all financial truth remains in original Group SoR.
+location = /webhooks/paddle {
+    access_log off;
+    error_log /dev/stderr crit;
+    if ($request_method != POST) { return 405; }
+    if ($args != "") { return 400; }
+    if ($request_uri != "/webhooks/paddle") { return 400; }
+    
+    client_max_body_size 512k;
+    client_body_buffer_size 512k;
+    client_body_timeout 10s;
+    proxy_http_version 1.1;
+    proxy_pass https://${FEEDHEALTH_GATEWAY_INGRESS_HOST}/webhooks/paddle;
+    proxy_ssl_server_name on;
+    proxy_ssl_name ${FEEDHEALTH_GATEWAY_INGRESS_HOST};
+    proxy_ssl_verify on;
+    proxy_ssl_verify_depth 3;
+    proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+    proxy_pass_request_headers off;
+    proxy_set_header Host ${FEEDHEALTH_GATEWAY_INGRESS_HOST};
+    proxy_set_header Connection "";
+    proxy_set_header Content-Type $http_content_type;
+    proxy_set_header Content-Length $content_length;
+    proxy_set_header CF-Access-Client-Id "${FEEDHEALTH_ACCESS_CLIENT_ID}";
+    proxy_set_header CF-Access-Client-Secret "${FEEDHEALTH_ACCESS_CLIENT_SECRET}";
+    proxy_set_header Paddle-Signature $http_paddle_signature;
+    
+    # Do not pass Authorization, client Access credentials, forwarding/IP claims
+    # or payment-proof claims. Cloudflare supplies its own authenticated source IP.
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 20s;
+    proxy_send_timeout 10s;
+    proxy_next_upstream off;
+    proxy_cache off;
+    proxy_store off;
+    proxy_buffering off;
+    proxy_max_temp_file_size 0;
+    proxy_request_buffering on;
+    proxy_hide_header Server;
+    proxy_hide_header X-Powered-By;
+    proxy_hide_header Location;
+    proxy_hide_header CF-Access-Client-Id;
+    proxy_hide_header CF-Access-Client-Secret;
+    proxy_hide_header CF-Access-Jwt-Assertion;
+    proxy_hide_header Cache-Control;
+    proxy_hide_header Set-Cookie;
+}
+location = /v1/feedhealth/checkout-intents {
+    access_log off;
+    error_log /dev/stderr crit;
+    if ($request_method != POST) { return 405; }
+    if ($args != "") { return 400; }
+    if ($request_uri != "/v1/feedhealth/checkout-intents") { return 400; }
+    if ($http_origin != "https://feed.qianwuai.com") { return 403; }
+    if ($http_sec_fetch_site != "same-origin") { return 403; }
+    client_max_body_size 135000;
+    client_body_buffer_size 135000;
+    client_body_timeout 10s;
+    proxy_http_version 1.1;
+    proxy_pass https://${FEEDHEALTH_GATEWAY_INGRESS_HOST}/v1/feedhealth/checkout-intents;
+    proxy_ssl_server_name on;
+    proxy_ssl_name ${FEEDHEALTH_GATEWAY_INGRESS_HOST};
+    proxy_ssl_verify on;
+    proxy_ssl_verify_depth 3;
+    proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+    proxy_pass_request_headers off;
+    proxy_set_header Host ${FEEDHEALTH_GATEWAY_INGRESS_HOST};
+    proxy_set_header Connection "";
+    proxy_set_header Content-Type $http_content_type;
+    proxy_set_header Content-Length $content_length;
+    proxy_set_header CF-Access-Client-Id "${FEEDHEALTH_ACCESS_CLIENT_ID}";
+    proxy_set_header CF-Access-Client-Secret "${FEEDHEALTH_ACCESS_CLIENT_SECRET}";
+    proxy_set_header Origin $http_origin;
+    proxy_set_header Sec-Fetch-Site $http_sec_fetch_site;
+    
+    # Do not pass Authorization, client Access credentials, forwarding/IP claims
+    # or payment-proof claims. Cloudflare supplies its own authenticated source IP.
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 20s;
+    proxy_send_timeout 10s;
+    proxy_next_upstream off;
+    proxy_cache off;
+    proxy_store off;
+    proxy_buffering off;
+    proxy_max_temp_file_size 0;
+    proxy_request_buffering on;
+    proxy_hide_header Server;
+    proxy_hide_header X-Powered-By;
+    proxy_hide_header Location;
+    proxy_hide_header CF-Access-Client-Id;
+    proxy_hide_header CF-Access-Client-Secret;
+    proxy_hide_header CF-Access-Jwt-Assertion;
+    proxy_hide_header Cache-Control;
+    
+}
+location = /v1/feedhealth/reports/read {
+    access_log off;
+    error_log /dev/stderr crit;
+    if ($request_method != POST) { return 405; }
+    if ($args != "") { return 400; }
+    if ($request_uri != "/v1/feedhealth/reports/read") { return 400; }
+    if ($http_origin != "https://feed.qianwuai.com") { return 403; }
+    if ($http_sec_fetch_site != "same-origin") { return 403; }
+    client_max_body_size 135000;
+    client_body_buffer_size 135000;
+    client_body_timeout 10s;
+    proxy_http_version 1.1;
+    proxy_pass https://${FEEDHEALTH_GATEWAY_INGRESS_HOST}/v1/feedhealth/reports/read;
+    proxy_ssl_server_name on;
+    proxy_ssl_name ${FEEDHEALTH_GATEWAY_INGRESS_HOST};
+    proxy_ssl_verify on;
+    proxy_ssl_verify_depth 3;
+    proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+    proxy_pass_request_headers off;
+    proxy_set_header Host ${FEEDHEALTH_GATEWAY_INGRESS_HOST};
+    proxy_set_header Connection "";
+    proxy_set_header Content-Type $http_content_type;
+    proxy_set_header Content-Length $content_length;
+    proxy_set_header CF-Access-Client-Id "${FEEDHEALTH_ACCESS_CLIENT_ID}";
+    proxy_set_header CF-Access-Client-Secret "${FEEDHEALTH_ACCESS_CLIENT_SECRET}";
+    proxy_set_header Origin $http_origin;
+    proxy_set_header Sec-Fetch-Site $http_sec_fetch_site;
+    proxy_set_header Cookie $http_cookie;
+    # Do not pass Authorization, client Access credentials, forwarding/IP claims
+    # or payment-proof claims. Cloudflare supplies its own authenticated source IP.
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 20s;
+    proxy_send_timeout 10s;
+    proxy_next_upstream off;
+    proxy_cache off;
+    proxy_store off;
+    proxy_buffering off;
+    proxy_max_temp_file_size 0;
+    proxy_request_buffering on;
+    proxy_hide_header Server;
+    proxy_hide_header X-Powered-By;
+    proxy_hide_header Location;
+    proxy_hide_header CF-Access-Client-Id;
+    proxy_hide_header CF-Access-Client-Secret;
+    proxy_hide_header CF-Access-Jwt-Assertion;
+    proxy_hide_header Cache-Control;
+    proxy_hide_header Set-Cookie;
+}
+location = /v1/feedhealth/reports/ack {
+    access_log off;
+    error_log /dev/stderr crit;
+    if ($request_method != POST) { return 405; }
+    if ($args != "") { return 400; }
+    if ($request_uri != "/v1/feedhealth/reports/ack") { return 400; }
+    if ($http_origin != "https://feed.qianwuai.com") { return 403; }
+    if ($http_sec_fetch_site != "same-origin") { return 403; }
+    client_max_body_size 135000;
+    client_body_buffer_size 135000;
+    client_body_timeout 10s;
+    proxy_http_version 1.1;
+    proxy_pass https://${FEEDHEALTH_GATEWAY_INGRESS_HOST}/v1/feedhealth/reports/ack;
+    proxy_ssl_server_name on;
+    proxy_ssl_name ${FEEDHEALTH_GATEWAY_INGRESS_HOST};
+    proxy_ssl_verify on;
+    proxy_ssl_verify_depth 3;
+    proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+    proxy_pass_request_headers off;
+    proxy_set_header Host ${FEEDHEALTH_GATEWAY_INGRESS_HOST};
+    proxy_set_header Connection "";
+    proxy_set_header Content-Type $http_content_type;
+    proxy_set_header Content-Length $content_length;
+    proxy_set_header CF-Access-Client-Id "${FEEDHEALTH_ACCESS_CLIENT_ID}";
+    proxy_set_header CF-Access-Client-Secret "${FEEDHEALTH_ACCESS_CLIENT_SECRET}";
+    proxy_set_header Origin $http_origin;
+    proxy_set_header Sec-Fetch-Site $http_sec_fetch_site;
+    proxy_set_header Cookie $http_cookie;
+    # Do not pass Authorization, client Access credentials, forwarding/IP claims
+    # or payment-proof claims. Cloudflare supplies its own authenticated source IP.
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 20s;
+    proxy_send_timeout 10s;
+    proxy_next_upstream off;
+    proxy_cache off;
+    proxy_store off;
+    proxy_buffering off;
+    proxy_max_temp_file_size 0;
+    proxy_request_buffering on;
+    proxy_hide_header Server;
+    proxy_hide_header X-Powered-By;
+    proxy_hide_header Location;
+    proxy_hide_header CF-Access-Client-Id;
+    proxy_hide_header CF-Access-Client-Secret;
+    proxy_hide_header CF-Access-Jwt-Assertion;
+    proxy_hide_header Cache-Control;
+    proxy_hide_header Set-Cookie;
+}
