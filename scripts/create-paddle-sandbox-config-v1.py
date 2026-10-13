@@ -40,6 +40,19 @@ def main():
     readiness=os.getenv("FEEDHEALTH_SANDBOX_DELIVERY_VERIFIED","NO").upper()
     if readiness not in ("NO","YES"):
         raise SystemExit("HOLD: invalid verified-delivery gate")
+    qa=os.getenv("FEEDHEALTH_SANDBOX_QA_ADMITTED","NO").upper()
+    if qa not in ("NO","YES") or (qa=="YES" and readiness=="YES"):
+        raise SystemExit("HOLD: Sandbox QA and verified delivery cannot overlap")
+    if qa=="YES":
+        base["status"]="SANDBOX_QA_TRANSACTION_TEST_ONLY"
+        base["fulfillment_status"]="SANDBOX_QA_DELIVERY_UNPROVEN"
+        base["fulfillment"]={
+            "mode":"AUTOMATIC_AI_ONLY",
+            "status":"SANDBOX_QA_READY",
+            "intake_path":"/v1/feedhealth/checkout-intents",
+            "report_path":"/v1/feedhealth/reports/read",
+            "download_ack_path":"/v1/feedhealth/reports/ack"
+        }
     if readiness=="YES":
         base["fulfillment_status"]="SANDBOX_TRUSTED_DELIVERY_VERIFIED"
         base["fulfillment"]={
@@ -57,5 +70,6 @@ def main():
     print("FEEDHEALTH_PADDLE_SANDBOX_CONFIG=CREATED_UNDEPLOYED")
     print("PRODUCTION_CHECKOUT_UNCHANGED=TRUE")
     print("WEBHOOK_AND_AI_DELIVERY_UNVERIFIED="+("FALSE_REQUIRES_RECEIPT_EVIDENCE" if readiness=="YES" else "TRUE"))
+    print("SANDBOX_QA_PAYMENT_TEST_ONLY="+("YES" if qa=="YES" else "NO"))
 if __name__=="__main__":
     main()
