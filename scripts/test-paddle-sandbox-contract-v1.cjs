@@ -1,0 +1,342 @@
+"use strict";
+const assert=require("node:assert/strict");
+const fs=require("node:fs");
+const vm=require("node:vm");
+const {test}=require("node:test");
+const path=require("node:path");
+const root=path.resolve(__dirname,"..");
+const source=fs.readFileSync(path.join(root,"first-payment.js"),"utf8");
+const production=JSON.parse(fs.readFileSync(path.join(root,"checkout-config.v1.json")));
+const sample=()=>({
+  enabled:true,provider:"PADDLE",environment:"sandbox",
+  sandbox_test_purchase_only:true,browser_may_assert_success:false,
+  success_confirmation:"TRUSTED_SERVER_ONLY",checkout_url:null,currency:"USD",price:49,
+  paddle:{client_side_token:"test_"+"0123456789abcd",price_id:"pri_"+"a".repeat(26),product_id:"pro_"+"b".repeat(26)}
+});
+function setup(paddle){
+  const loads=[];
+  const c=vm.createContext({
+    crypto:require("node:crypto").webcrypto,URLSearchParams,URL,Intl,Uint8Array,
+    Paddle:paddle,location:{search:"",assign:()=>{throw Error("NAVIGATION_DENIED")}},
+    document:{addEventListener(){},createElement:()=>({}),head:{appendChild:e=>{loads.push(e.src);e.onload?.()}}}
+  });
+  c.globalThis=c;
+  vm.runInContext(source,c,{filename:"first-payment.js"});
+  return {c,loads};
+}
+test("production still fails closed",()=>{
+  assert.equal(production.enabled,false);
+  assert.equal(production.provider,"UNBOUND");
+  const {c}=setup();
+  assert.equal(vm.runInContext("isSandboxPaddleCheckout("+JSON.stringify(production)+")",c),false);
+});
+test("sandbox validated and negative cases rejected",()=>{
+  const {c}=setup();
+  for(const [k,v] of [["enabled",false],["provider","STRIPE"],["environment","live"],["sandbox_test_purchase_only",false],["browser_may_assert_success",true],["success_confirmation","BROWSER"],["currency","GBP"],["price",0],["checkout_url","https://example.test"]]){
+    const x=sample();x[k]=v;
+    assert.equal(vm.runInContext("isSandboxPaddleCheckout("+JSON.stringify(x)+")",c),false,k);
+  }
+  for(const [k,v] of [["client_side_token","live_abcd"],["client_side_token","test_1"],["price_id","pri_bad"],["product_id","pro_bad"]]){
+    const x=sample();x.paddle[k]=v;
+    assert.equal(vm.runInContext("isSandboxPaddleCheckout("+JSON.stringify(x)+")",c),false,k);
+  }
+  assert.equal(vm.runInContext("isSandboxPaddleCheckout("+JSON.stringify(sample())+")",c),true);
+});
+test("sandbox opens fixed one-item one-time price, never asserts payment",async()=>{
+  const env=[],init=[],opens=[];
+  const paddle={
+    Environment:{set:x=>env.push(x)},Initialize:x=>init.push(x),
+    PricePreview:async()=>({data:{currencyCode:"USD",details:{lineItems:[{
+      price:{id:sample().paddle.price_id,productId:sample().paddle.product_id,
+        unitPrice:{currencyCode:"USD",amount:"4900"},billingCycle:null,trialPeriod:null}
+    }]}}}),
+    Checkout:{open:x=>opens.push(x)}
+  };
+  const {c,loads}=setup(paddle);
+  c.testConfig=sample();
+  await vm.runInContext('openSandboxPaddleCheckout(testConfig,"REF_1")',c);
+  await vm.runInContext('openSandboxPaddleCheckout(testConfig,"REF_2")',c);
+  assert.deepEqual(env,["sandbox"]);
+  assert.equal(init.length,1);
+  assert.equal(init[0].token,c.testConfig.paddle.client_side_token);
+  assert.equal(opens.length,2);
+  assert.equal(opens[0].items[0].priceId,c.testConfig.paddle.price_id);
+  assert.equal(opens[0].items[0].quantity,1);
+  assert.equal(opens[0].customData.checkout_ref,"REF_1");
+  assert.equal(opens[0].customData.test_only,"true");
+  assert.deepEqual(loads,[]);
+  assert.ok(!source.includes("PAYMENT_SUCCEEDED"));
+  assert.ok(!source.includes("localStorage"));
+});
+test("invalid source cannot even load checkout library",async()=>{
+  const {c,loads}=setup();
+  c.invalid=sample();c.invalid.environment="live";
+  await assert.rejects(vm.runInContext('openSandboxPaddleCheckout(invalid,"NO")',c));
+  assert.deepEqual(loads,[]);
+});
+test("buyer checkout registration fails closed unless evidence, consent and trusted server receipt exist",async()=>{
+  const {c}=setup();
+  c.config=sample();
+  c.config.fulfillment={mode:"AUTOMATIC_AI_ONLY",status:"VERIFIED_READY",
+                        intake_path:"/v1/feedhealth/checkout-intents",
+                        download_ack_path:"/v1/feedhealth/reports/ack"};
+  c.ref="b89a7408-51de-4395-aeed-12bf406c9437";
+  c.feedHealthBuyerEvidenceSnapshotV1=()=>({
+    schema:"feedhealth.buyer_evidence_snapshot.v1",source_kind:"BUYER_SUPPLIED_JSON",
+    channel:"google",products:[{id:"p1",title:"Test product"}]
+  });
+  let calls=0;
+  c.fetch=async(path,opts)=>{
+    calls++;
+    assert.equal(path,"/v1/feedhealth/checkout-intents");
+    assert.equal(opts.method,"POST");
+    assert.equal(opts.credentials,"same-origin");
+    assert.equal(opts.headers["Idempotency-Key"],c.ref);
+    assert.equal(JSON.parse(opts.body).delivery_email,"buyer@example.com");
+    return {status:201,json:async()=>({
+      schema:"feedhealth.checkout_intent_receipt.v1",decision:"ACCEPTED",
+      checkout_ref:c.ref,ai_delivery_authorized_after_verified_payment:true,
+      session_mode:"HTTP_ONLY_COOKIE"
+    })};
+  };
+  const check=()=>vm.runInContext('reservePaidDiagnosisBeforeCheckout(config,ref,"buyer@example.com",true)',c);
+  await check();
+  assert.equal(calls,1);
+  await assert.rejects(vm.runInContext('reservePaidDiagnosisBeforeCheckout(config,ref,"buyer@example.com",false)',c));
+  await assert.rejects(vm.runInContext('reservePaidDiagnosisBeforeCheckout(config,ref,"INVALID",true)',c));
+  assert.equal(calls,1);
+  c.feedHealthBuyerEvidenceSnapshotV1=()=>null;
+  await assert.rejects(check());
+  assert.equal(calls,1);
+  c.feedHealthBuyerEvidenceSnapshotV1=()=>({schema:"feedhealth.buyer_evidence_snapshot.v1",
+    products:[{id:"1"}]});
+  c.config.fulfillment.intake_path="https://evil.invalid/collect";
+  await assert.rejects(check());
+  assert.equal(calls,1);
+  c.config.fulfillment.intake_path="/v1/feedhealth/checkout-intents";
+  c.fetch=async()=>({status:201,json:async()=>({decision:"ACCEPTED",
+    checkout_ref:c.ref,ai_delivery_authorized_after_verified_payment:true})});
+  await assert.rejects(check()); // missing schema: no assertion of provider trust
+  c.fetch=async()=>({status:503,json:async()=>({})});
+  await assert.rejects(check()); // provider or intake outage denies payment
+});
+test("only original server-signed payment and bound report allow browser delivery",async()=>{
+  const {c}=setup();
+  c.config=sample();
+  c.config.fulfillment={status:"VERIFIED_READY",report_path:"/v1/feedhealth/reports/read"};
+  c.paidSession={schema:"feedhealth.client_report_session.v1",
+    checkout_ref:"b89a7408-51de-4395-aeed-12bf406c9437",
+    session_mode:"HTTP_ONLY_COOKIE"};
+  let network=0;
+  c.fetch=async(path,options)=>{
+    network++;
+    assert.equal(path,"/v1/feedhealth/reports/read");
+    assert.equal(options.method,"POST");
+    assert.equal(options.credentials,"same-origin");
+    assert.deepEqual(JSON.parse(options.body),{checkout_ref:c.paidSession.checkout_ref});
+    return {status:409};
+  };
+  const check=()=>vm.runInContext("requestSignedPaidReport(config,paidSession)",c);
+  assert.equal(await check(),null);
+  assert.equal(network,1);
+  c.fetch=async()=>({status:200,json:async()=>({
+    schema:"feedhealth.authorized_report_delivery.v1",
+    checkout_ref:c.paidSession.checkout_ref,delivery_mode:"AUTHORIZED_BUYER_PULL",
+    report_sha256:"b".repeat(64),
+    report:{schema:"feedhealth.ai_diagnosis_report.v1",
+      checkout_ref:c.paidSession.checkout_ref,summary:"Fixture only."}
+  })});
+  const success=await check();
+  assert.equal(success.report.summary,"Fixture only.");
+  // Restored browser tabs send no persistent checkout-ref; server's
+  // HttpOnly cookie is authoritative and no JS bearer exists.
+  c.paidSession={schema:"feedhealth.client_report_session.v1",session_mode:"HTTP_ONLY_COOKIE"};
+  c.fetch=async(_path,options)=>{
+    assert.deepEqual(JSON.parse(options.body),{});
+    return {status:200,json:async()=>({
+      schema:"feedhealth.authorized_report_delivery.v1",
+      checkout_ref:"b89a7408-51de-4395-aeed-12bf406c9437",
+      delivery_mode:"AUTHORIZED_BUYER_PULL",report_sha256:"b".repeat(64),
+      report:{schema:"feedhealth.ai_diagnosis_report.v1",
+        checkout_ref:"b89a7408-51de-4395-aeed-12bf406c9437",
+        summary:"Cookie-bound report restored."}
+    })};
+  };
+  assert.equal((await check()).report.summary,"Cookie-bound report restored.");
+  assert.ok(!source.includes("sessionStorage"));
+
+  assert.ok(!source.includes("sessionStorage.setItem(\"feedhealth_report_token"));
+  c.paidSession={schema:"feedhealth.client_report_session.v1",
+    checkout_ref:"b89a7408-51de-4395-aeed-12bf406c9437",
+    session_mode:"HTTP_ONLY_COOKIE"};
+  c.fetch=async()=>({status:200,json:async()=>({
+    schema:"feedhealth.authorized_report_delivery.v1",
+    checkout_ref:"wrong-checkout",delivery_mode:"AUTHORIZED_BUYER_PULL",
+    report_sha256:"b".repeat(64),
+    report:{schema:"feedhealth.ai_diagnosis_report.v1",checkout_ref:"wrong-checkout"}
+  })});
+  await assert.rejects(check()); // cannot deliver another buyer's report
+  c.config.fulfillment.report_path="https://evil.invalid/collect";
+  await assert.rejects(check()); // no cross-origin bearer exfiltration
+});
+test("browser checkout completed event only wakes server verification",async()=>{
+  const initialized=[];
+  const paddle={Environment:{set(){}},Initialize:x=>initialized.push(x),
+    PricePreview:async()=>({data:{currencyCode:"USD",details:{lineItems:[{
+      price:{id:sample().paddle.price_id,productId:sample().paddle.product_id,
+        unitPrice:{currencyCode:"USD",amount:"4900"},billingCycle:null,trialPeriod:null}
+    }]}}}),
+    Checkout:{open(){} }};
+  const {c}=setup(paddle);
+  c.config=sample();
+  await vm.runInContext('openSandboxPaddleCheckout(config,"REF_1")',c);
+  assert.equal(typeof initialized[0].eventCallback,"function");
+  // No authorizedReportSession: event is NOT a receipt and cannot deliver.
+  initialized[0].eventCallback({name:"checkout.completed"});
+  assert.ok(!source.includes('postBuyerAction("PAYMENT_SUCCEEDED"'));
+  assert.ok(!source.includes("localStorage"));
+});
+test("existing storefront analysis retains evidence only for buyer opt-in",()=>{
+  const source=fs.readFileSync(path.join(root,"app.js"),"utf8");
+  assert.match(source,/feedHealthBuyerEvidenceSnapshotV1/);
+  assert.match(source,/latestPaidDiagnosisSource = null/);
+  assert.match(source,/capturePaidDiagnosisSource\(products, "BUYER_SUPPLIED_JSON"\)/);
+  assert.match(source,/capturePaidDiagnosisSource\(products, "PUBLIC_STOREFRONT"\)/);
+  assert.ok(!source.includes("localStorage.setItem"));
+});
+
+
+function liveSample(){
+  const config=sample();
+  config.environment="production";
+  config.sandbox_test_purchase_only=false;
+  config.production_authorization="GAEC_GO";
+  config.merchant_verified=true;
+  config.checkout_domain_approved=true;
+  config.public_signed_webhook_verified=true;
+  config.fulfillment={
+    mode:"AUTOMATIC_AI_ONLY",status:"VERIFIED_READY",
+    intake_path:"/v1/feedhealth/checkout-intents",
+    report_path:"/v1/feedhealth/reports/read",
+    download_ack_path:"/v1/feedhealth/reports/ack"
+  };
+  config.paddle.client_side_token="live_"+"0123456789abcdef";
+  config.paddle.currency_localization_disabled=true;
+  config.paddle.country_price_overrides_absent=true;
+  return config;
+}
+
+test("Live stays blocked without exact GAEC, merchant, webhook and fulfillment admission",()=>{
+  const {c}=setup();
+  assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(production)+")",c),false);
+  for(const [key,val] of [
+    ["environment","sandbox"],["sandbox_test_purchase_only",true],
+    ["production_authorization","DENIED"],["merchant_verified",false],
+    ["checkout_domain_approved",false],["public_signed_webhook_verified",false],
+    ["enabled",false],["provider","UNBOUND"],["price",50],
+    ["browser_may_assert_success",true],["success_confirmation","BROWSER"],
+    ["checkout_url","https://example.test/"]]){
+      const bad=liveSample();bad[key]=val;
+      assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(bad)+")",c),false,key);
+  }
+  for(const [key,val] of [
+    ["status","NOT_VERIFIED"],["mode","MANUAL"],
+    ["intake_path","https://evil.invalid/data"],["report_path","/wrong/report"],
+    ["download_ack_path","https://untrusted.invalid/ack"]]){
+      const bad=liveSample();bad.fulfillment[key]=val;
+      assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(bad)+")",c),false,key);
+  }
+  for(const [key,val] of [
+    ["client_side_token","test_wrongenv1234567890"],
+    ["price_id","pri_short"],["product_id","pro_short"]]){
+    const bad=liveSample();bad.paddle[key]=val;
+    assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(bad)+")",c),false,key);
+  }
+  for(const [name,value] of [
+    ["currency_localization_disabled",false],["country_price_overrides_absent",false]
+  ]) {
+    const bad=liveSample();bad.paddle[name]=value;
+    assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(bad)+")",c),false,name);
+  }
+  assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(liveSample())+")",c),true);
+});
+
+test("Only gated Live Paddle.js opens one price; no sandbox environment, tracking or payment claim",async()=>{
+  const env=[],initialize=[],opens=[];
+  const paddle={Environment:{set:v=>env.push(v)},
+    Initialize:v=>initialize.push(v),
+    PricePreview:async()=>({data:{currencyCode:"USD",details:{lineItems:[{
+      price:{id:liveSample().paddle.price_id,productId:liveSample().paddle.product_id,
+        unitPrice:{currencyCode:"USD",amount:"4900"},billingCycle:null,trialPeriod:null}
+    }]}}}),
+    Checkout:{open:v=>opens.push(v)}};
+  const {c}=setup(paddle);
+  c.live=liveSample();
+  await vm.runInContext('openLivePaddleCheckout(live,"b89a7408-51de-4395-aeed-12bf406c9437")',c);
+  assert.deepEqual(env,[]);
+  assert.equal(initialize.length,1);
+  assert.equal(opens.length,1);
+  assert.equal(opens[0].items[0].quantity,1);
+  assert.equal(opens[0].items[0].priceId,c.live.paddle.price_id);
+  assert.equal(opens[0].customData.checkout_ref,"b89a7408-51de-4395-aeed-12bf406c9437");
+  assert.equal(opens[0].customData.test_only,"false");
+  // Group signed Paddle webhook verifier requires exact string "false" in Live.
+  assert.equal(JSON.stringify(opens[0]).includes("buyer@example.com"),false);
+  c.sandbox=sample();
+  await assert.rejects(vm.runInContext('openSandboxPaddleCheckout(sandbox,"REF_2")',c),
+    /CROSS_ENVIRONMENT_PADDLE_INIT_DENIED/);
+});
+
+test("foreign-currency localized preview is blocked BEFORE a Paddle payment overlay",async()=>{
+  const opened=[];
+  const paddle={Environment:{set(){}},Initialize(){},
+    PricePreview:async()=>({data:{currencyCode:"GBP",details:{lineItems:[{
+      price:{id:liveSample().paddle.price_id,productId:liveSample().paddle.product_id,
+        unitPrice:{currencyCode:"USD",amount:"4900"},billingCycle:null,trialPeriod:null}
+    }]}}}),
+    Checkout:{open:opts=>opened.push(opts)}};
+  const {c}=setup(paddle);
+  c.live=liveSample();
+  await assert.rejects(vm.runInContext('openLivePaddleCheckout(live,"aabbccdd-1234-4abc-8def-123456789000")',c),
+    /PADDLE_PRICE_OR_CURRENCY_NOT_SUPPORTED/);
+  assert.equal(opened.length,0);
+});
+
+test("browser buyer download click requires original signed report and idempotent Group SoR receipt",async()=>{
+  const {c}=setup();
+  const receipt={schema:"feedhealth.authorized_report_delivery.v1",
+    checkout_ref:"b89a7408-51de-4395-aeed-12bf406c9437",
+    report_sha256:"c".repeat(64),delivery_mode:"AUTHORIZED_BUYER_PULL"};
+  c.receipt=receipt;
+  let calls=0;
+  c.fetch=async(path,options)=>{
+    calls++;
+    assert.equal(path,"/v1/feedhealth/reports/ack");
+    assert.equal(options.method,"POST");
+    assert.equal(options.credentials,"same-origin");
+    assert.equal(options.redirect,"error");
+    assert.equal(options.cache,"no-store");
+    assert.deepEqual(JSON.parse(options.body),{
+      checkout_ref:receipt.checkout_ref,report_sha256:receipt.report_sha256});
+    return {status:200,json:async()=>({
+      schema:"feedhealth.buyer_download_ack.v1",decision:"RECORDED",
+      checkout_ref:receipt.checkout_ref,report_sha256:receipt.report_sha256,
+      buyer_download_acknowledged:true})};
+  };
+  const ack=()=>vm.runInContext("acknowledgeAuthorizedBuyerDownload(receipt)",c);
+  assert.equal((await ack()).decision,"RECORDED");
+  assert.equal(calls,1);
+  c.receipt={...receipt,schema:"not-signed"};
+  await assert.rejects(ack(),/BUYER_DOWNLOAD_ACK_NOT_AUTHORIZED/);
+  assert.equal(calls,1);
+  c.receipt=receipt;
+  c.fetch=async()=>({status:404});
+  await assert.rejects(ack(),/BUYER_DOWNLOAD_ACK_SERVER_UNAVAILABLE/);
+  c.fetch=async()=>({status:200,json:async()=>({
+    schema:"feedhealth.buyer_download_ack.v1",decision:"RECORDED",
+    checkout_ref:"other-order",report_sha256:receipt.report_sha256,
+    buyer_download_acknowledged:true})});
+  await assert.rejects(ack(),/BUYER_DOWNLOAD_ACK_RECEIPT_INVALID/);
+});
+
+console.log("FEEDHEALTH_PADDLE_SANDBOX_CONTRACT=PASS");
