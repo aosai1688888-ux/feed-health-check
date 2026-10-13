@@ -34,6 +34,21 @@ def main():
         "paddle":{"client_side_token":token,"price_id":price,"product_id":product},
         "fulfillment_status":"NOT_VERIFIED","production_authorization":"DENIED"
     })
+    # Preview mode stays unable to take any payment. Full Sandbox checkout may
+    # be staged ONLY after actual original-SoR intake, bounded AI delivery
+    # and authorized buyer readback have been verified independently.
+    readiness=os.getenv("FEEDHEALTH_SANDBOX_DELIVERY_VERIFIED","NO").upper()
+    if readiness not in ("NO","YES"):
+        raise SystemExit("HOLD: invalid verified-delivery gate")
+    if readiness=="YES":
+        base["fulfillment_status"]="SANDBOX_TRUSTED_DELIVERY_VERIFIED"
+        base["fulfillment"]={
+            "mode":"AUTOMATIC_AI_ONLY",
+            "status":"VERIFIED_READY",
+            "intake_path":"/v1/feedhealth/checkout-intents",
+            "report_path":"/v1/feedhealth/reports/read",
+            "download_ack_path":"/v1/feedhealth/reports/ack"
+        }
     output.parent.mkdir(parents=True,exist_ok=True)
     fd=os.open(output,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
     with os.fdopen(fd,"w") as f:
@@ -41,6 +56,6 @@ def main():
         f.write("\n")
     print("FEEDHEALTH_PADDLE_SANDBOX_CONFIG=CREATED_UNDEPLOYED")
     print("PRODUCTION_CHECKOUT_UNCHANGED=TRUE")
-    print("WEBHOOK_AND_AI_DELIVERY_UNVERIFIED=TRUE")
+    print("WEBHOOK_AND_AI_DELIVERY_UNVERIFIED="+("FALSE_REQUIRES_RECEIPT_EVIDENCE" if readiness=="YES" else "TRUE"))
 if __name__=="__main__":
     main()

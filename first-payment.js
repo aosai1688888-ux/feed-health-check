@@ -285,7 +285,10 @@ function showAuthorizedReport(receipt) {
 async function pollSignedPaymentAndReport(config) {
   if (authorizedReportPollRunning || !authorizedReportSession) return;
   authorizedReportPollRunning=true;
-  const status=document.getElementById("checkout-state");
+  const results=document.getElementById("results");
+  const status=results?.hidden
+    ? (document.getElementById("buyer-report-recovery-state") || document.getElementById("checkout-state"))
+    : document.getElementById("checkout-state");
   try {
     for(let attempt=0;attempt<REPORT_MAX_CHECKS;attempt++) {
       if (!authorizedReportSession) break;
@@ -456,7 +459,10 @@ function renderOffer(panel, offer, checkout) {
     authorizedReportSession={schema:"feedhealth.client_report_session.v1",
       session_mode:"HTTP_ONLY_COOKIE"};
     void pollSignedPaymentAndReport(checkout).catch(() => {
-      const status=document.getElementById("checkout-state");
+      const results=document.getElementById("results");
+      const status=results?.hidden
+        ? (document.getElementById("buyer-report-recovery-state") || document.getElementById("checkout-state"))
+        : document.getElementById("checkout-state");
       if(status) status.textContent="No authorized report could be retrieved for this browser session.";
     });
   });
@@ -541,9 +547,29 @@ async function initializeFirstPayment() {
   }
 
   renderOffer(panel, offer, checkout);
+  // Recover a report after refresh without requiring another product scan.
+  // Only the original server's HttpOnly cookie authorizes report retrieval.
+  const results = document.getElementById("results");
+  if (checkout?.fulfillment?.status === "VERIFIED_READY" && results) {
+    const recoveryButton = document.getElementById("resume-report");
+    const reportHost = document.getElementById("feedhealth-paid-report");
+    if (recoveryButton && reportHost) {
+      const recovery = document.createElement("section");
+      recovery.id = "feedhealth-existing-report";
+      recovery.className = "shell";
+      recovery.setAttribute("aria-label", "Existing paid diagnosis");
+      const explanation = document.createElement("p");
+      explanation.textContent = "Already purchased? Retrieve your report on this device using your original secure browser session.";
+      const recoveryStatus = document.createElement("p");
+      recoveryStatus.id = "buyer-report-recovery-state";
+      recoveryStatus.setAttribute("role", "status");
+      recoveryStatus.setAttribute("aria-live", "polite");
+      recovery.append(explanation, recoveryButton, recoveryStatus, reportHost);
+      results.parentNode?.insertBefore(recovery, results);
+    }
+  }
   // Recovery is explicit buyer action plus HttpOnly cookie, not tracking storage.
 
-  const results = document.getElementById("results");
   let resultSeen = false;
   const observeResults = () => {
     if (!resultSeen && results && !results.hidden) {
