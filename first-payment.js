@@ -111,7 +111,8 @@ function isLivePaddleCheckout(config) {
       || config.fulfillment?.mode !== "AUTOMATIC_AI_ONLY"
       || config.fulfillment?.status !== "VERIFIED_READY"
       || config.fulfillment?.intake_path !== "/v1/feedhealth/checkout-intents"
-      || config.fulfillment?.report_path !== "/v1/feedhealth/reports/read") return false;
+      || config.fulfillment?.report_path !== "/v1/feedhealth/reports/read"
+      || config.fulfillment?.download_ack_path !== "/v1/feedhealth/reports/ack") return false;
   const settings=config.paddle;
   // Release authority must verify USD-only seller settings. Otherwise Paddle
   // automatic FX creates completed non-USD sales rejected by the original
@@ -149,6 +150,7 @@ async function reservePaidDiagnosisBeforeCheckout(config, checkoutRef, email, co
       || config?.fulfillment?.mode !== "AUTOMATIC_AI_ONLY"
       || config?.fulfillment?.status !== "VERIFIED_READY"
       || config?.fulfillment?.intake_path !== "/v1/feedhealth/checkout-intents"
+      || config?.fulfillment?.download_ack_path !== "/v1/feedhealth/reports/ack"
       || !(isSandboxPaddleCheckout(config) || isLivePaddleCheckout(config))) {
     throw new Error("TRUSTED_DIAGNOSIS_INTAKE_NOT_READY");
   }
@@ -225,6 +227,33 @@ async function requestSignedPaidReport(config, session) {
   return receipt;
 }
 
+async function acknowledgeAuthorizedBuyerDownload(receipt) {
+  if (receipt?.schema!=="feedhealth.authorized_report_delivery.v1"
+      || receipt.delivery_mode!=="AUTHORIZED_BUYER_PULL"
+      || !/^[0-9a-f-]{36}$/i.test(receipt.checkout_ref||"")
+      || !/^[a-f0-9]{64}$/.test(receipt.report_sha256||"")) {
+    throw new Error("BUYER_DOWNLOAD_ACK_NOT_AUTHORIZED");
+  }
+  // Client download initiation is independently recorded in original Group SoR.
+  // Never equate this callback to OS-level file save or human file reading.
+  const response=await fetch("/v1/feedhealth/reports/ack",{
+    method:"POST",credentials:"same-origin",redirect:"error",cache:"no-store",
+    headers:{"Content-Type":"application/json","Accept":"application/json"},
+    body:JSON.stringify({checkout_ref:receipt.checkout_ref,
+      report_sha256:receipt.report_sha256})
+  });
+  if(response.status!==200) throw new Error("BUYER_DOWNLOAD_ACK_SERVER_UNAVAILABLE");
+  const ack=await response.json();
+  if(ack?.schema!=="feedhealth.buyer_download_ack.v1"
+      || !["RECORDED","IDEMPOTENT_REPLAY"].includes(ack.decision)
+      || ack.checkout_ref!==receipt.checkout_ref
+      || ack.report_sha256!==receipt.report_sha256
+      || ack.buyer_download_acknowledged!==true) {
+    throw new Error("BUYER_DOWNLOAD_ACK_RECEIPT_INVALID");
+  }
+  return ack;
+}
+
 function showAuthorizedReport(receipt) {
   const host=document.getElementById("feedhealth-paid-report");
   if (!host) throw new Error("REPORT_CONTAINER_MISSING");
@@ -240,6 +269,15 @@ function showAuthorizedReport(receipt) {
   link.download="FeedHealth-diagnosis-"+receipt.checkout_ref+".json";
   link.textContent="Download your verified-payment AI report";
   link.rel="noopener noreferrer";
+  link.addEventListener("click",()=>{
+    void acknowledgeAuthorizedBuyerDownload(receipt).then(()=>{
+      const status=document.getElementById("checkout-state");
+      if(status) status.textContent="Download initiated and acknowledged by the original order system.";
+    }).catch(()=>{
+      const status=document.getElementById("checkout-state");
+      if(status) status.textContent="Download requested; order-system confirmation unavailable. Retry this download on your device.";
+    });
+  });
   host.replaceChildren(summary,link);
   host.hidden=false;
 }
