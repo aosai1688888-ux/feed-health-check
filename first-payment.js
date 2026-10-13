@@ -89,7 +89,7 @@ function isSandboxPaddleCheckout(config) {
       || config.success_confirmation !== "TRUSTED_SERVER_ONLY" || config.currency !== "USD"
       || config.price !== 49 || config.checkout_url !== null) return false;
   const settings = config.paddle;
-  return !!(settings && /^test_[a-zA-Z0-9_]{12,160}$/.test(settings.client_side_token || "")
+  return !!(settings && /^test_[a-zA-Z0-9]{27}$/.test(settings.client_side_token || "")
     && /^pri_[a-z0-9]{20,40}$/.test(settings.price_id || "")
     && /^pro_[a-z0-9]{20,40}$/.test(settings.product_id || ""));
 }
@@ -119,7 +119,7 @@ function isLivePaddleCheckout(config) {
   // exact-USD Group SoR binding.
   if(settings?.currency_localization_disabled!==true
      || settings?.country_price_overrides_absent!==true) return false;
-  return !!(settings && /^live_[a-zA-Z0-9_]{12,160}$/.test(settings.client_side_token || "")
+  return !!(settings && /^live_[a-zA-Z0-9]{27}$/.test(settings.client_side_token || "")
     && /^pri_[a-z0-9]{20,40}$/.test(settings.price_id || "")
     && /^pro_[a-z0-9]{20,40}$/.test(settings.product_id || ""));
 }
