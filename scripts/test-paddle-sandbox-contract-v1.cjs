@@ -215,6 +215,8 @@ function liveSample(){
     report_path:"/v1/feedhealth/reports/read"
   };
   config.paddle.client_side_token="live_"+"0123456789abcdef";
+  config.paddle.currency_localization_disabled=true;
+  config.paddle.country_price_overrides_absent=true;
   return config;
 }
 
@@ -242,6 +244,12 @@ test("Live stays blocked without exact GAEC, merchant, webhook and fulfillment a
     ["price_id","pri_short"],["product_id","pro_short"]]){
     const bad=liveSample();bad.paddle[key]=val;
     assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(bad)+")",c),false,key);
+  }
+  for(const [name,value] of [
+    ["currency_localization_disabled",false],["country_price_overrides_absent",false]
+  ]) {
+    const bad=liveSample();bad.paddle[name]=value;
+    assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(bad)+")",c),false,name);
   }
   assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(liveSample())+")",c),true);
 });
