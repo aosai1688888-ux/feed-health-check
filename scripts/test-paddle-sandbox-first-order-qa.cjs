@@ -29,6 +29,49 @@ async function fields(page){
  }
  console.log("PADDLE_QA_FORM_SHAPE="+JSON.stringify(snapshot).slice(0,5000));
 }
+// Read provider-owned validation metadata only: never log field values or payment details.
+async function paddleStepDiagnostic(page,stage){
+ const frames=[];
+ for(const frame of page.frames()){
+   let host;try{host=new URL(frame.url()).hostname}catch{continue}
+   if(host!=="sandbox-buy.paddle.com")continue;
+   const result=await frame.evaluate(()=>{
+     const isShown=x=>!!x && !!(x.offsetWidth||x.offsetHeight||x.getClientRects().length);
+     const country=document.querySelector("select[name=countryCode]");
+     const postcode=document.querySelector("input[name=postcode]");
+     const email=document.querySelector("input[name=email]");
+     const continueButton=[...document.querySelectorAll("button")].find(
+       x=>isShown(x)&&/^continue$/i.test((x.textContent||"").trim()));
+     const alerts=[...document.querySelectorAll(
+       '[role="alert"],[aria-live="assertive"],[class*="error"],[data-testid*="error"]'
+     )].filter(isShown);
+     const text=alerts.map(x=>(x.textContent||"").slice(0,300)).join(" ");
+     const categories=[];
+     for(const [name,re] of [
+       ["POSTCODE",/postal|postcode|zip/i],["COUNTRY",/country/i],
+       ["EMAIL",/e-mail|email/i],["ADDRESS",/billing address|street address/i],
+       ["PAYMENT",/payment|card/i],["GENERIC_RETRY",/try again|went wrong|failed|unable/i]
+     ])if(re.test(text))categories.push(name);
+     return {
+       countryIsUS:country?.value==="US",
+       countryValid:country?.validity?.valid??null,
+       postcodeHasFiveChars:postcode?.value?.length===5,
+       postcodeValid:postcode?.validity?.valid??null,
+       emailNonempty:!!email?.value,
+       emailValid:email?.validity?.valid??null,
+       continueVisible:!!continueButton,continueDisabled:continueButton?.disabled??null,
+       formValid:continueButton?.closest("form")?.checkValidity()??null,
+       visibleAlertCount:alerts.length,errorCategories:categories,
+       invalidFieldNames:[...document.querySelectorAll("input[aria-invalid=true],select[aria-invalid=true]")]
+         .map(x=>x.getAttribute("name")||"unnamed").slice(0,8),
+       cardFieldCount:document.querySelectorAll(
+         'input[autocomplete="cc-number"],input[name*="card" i]').length
+     };
+   }).catch(()=>({evaluationFailed:true}));
+   frames.push(result);
+ }
+ console.log("PADDLE_SANDBOX_STEP_DIAGNOSTIC="+JSON.stringify({stage,frames}));
+}
 async function input(page,selectors,text,name,required){
  for(let attempt=0;attempt<5;attempt++){
    for(const frame of page.frames())for(const selector of selectors){
@@ -68,6 +111,26 @@ async function button(page,patterns){
    let reservation=null;
    const networkTrace=[];
    const browserErrors=[];
+   const providerTransport=[];
+   const providerHost=url=>{
+     try{
+       const h=new URL(url).hostname;
+       return h==="paddle.com"||h.endsWith(".paddle.com")
+         ||h==="stripe.com"||h.endsWith(".stripe.com")
+         ||h==="stripe.network"||h.endsWith(".stripe.network")?h:null;
+     }catch{return null}
+   };
+   page.on("response",response=>{
+     const host=providerHost(response.url());
+     if(host&&response.status()>=400&&providerTransport.length<30)
+       providerTransport.push({host,status:response.status(),type:response.request().resourceType()});
+   });
+   page.on("requestfailed",request=>{
+     const host=providerHost(request.url());
+     if(host&&providerTransport.length<30)
+       providerTransport.push({host,failed:true,type:request.resourceType(),
+         reason:(request.failure()||"UNKNOWN").slice(0,70)});
+   });
    page.on("request",request=>{
      try{
        const u=new URL(request.url());
@@ -214,8 +277,11 @@ async function button(page,patterns){
    assert.ok(countrySelected,"PADDLE_SANDBOX_BUYER_COUNTRY_NOT_AVAILABLE");
    await input(page,["input[name=postcode]","input[autocomplete=postal-code]",
      "input[name*=zip i]"],"10001","BILLING_POSTCODE",true);
+   await paddleStepDiagnostic(page,"BEFORE_CONTINUE");
    assert.ok(await button(page,[/continue/i,/next/i]),"PADDLE_SANDBOX_ADDRESS_STEP_NOT_SUBMITTED");
    await page.waitForTimeout(2500);
+   await paddleStepDiagnostic(page,"AFTER_CONTINUE");
+   console.log("PADDLE_SANDBOX_PROVIDER_TRANSPORT="+JSON.stringify(providerTransport));
    await fields(page);
    await input(page,["input[autocomplete=cc-number]","input[name*=card i]",
      "input[placeholder*=card/i]"],"4242424242424242","TEST_CARD",true);
