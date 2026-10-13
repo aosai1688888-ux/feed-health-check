@@ -127,9 +127,13 @@ async function button(page,patterns){
    });
    page.on("requestfailed",request=>{
      const host=providerHost(request.url());
-     if(host&&providerTransport.length<30)
-       providerTransport.push({host,failed:true,type:request.resourceType(),
-         reason:(request.failure()||"UNKNOWN").slice(0,70)});
+     if(host&&providerTransport.length<30){
+       const failure=request.failure();
+       const errorText=typeof failure==="string"?failure:failure?.errorText;
+       const reasonClass=typeof errorText==="string"
+         ?errorText.match(/net::ERR_[A-Z_]+/)?.[0]||"REQUEST_FAILED":"REQUEST_FAILED";
+       providerTransport.push({host,failed:true,type:request.resourceType(),reasonClass});
+     }
    });
    page.on("request",request=>{
      try{
