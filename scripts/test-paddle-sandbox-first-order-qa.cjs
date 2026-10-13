@@ -182,7 +182,9 @@ async function button(page,patterns){
    assert.equal(reservation.session_mode,"HTTP_ONLY_COOKIE");
    console.log("ORIGINAL_SOR_QA_ORDER_RESERVATION=PASS");
    console.log("QA_CHECKOUT_REFERENCE="+reservation.checkout_ref);
-   assert.ok((await context.cookies(origin)).some(c=>c.name==="fhpd_v1"&&c.httpOnly));
+   assert.ok((await context.cookies(origin+"/v1/feedhealth/reports/read")).some(
+     c=>c.name==="fhpd_v1" && c.httpOnly && c.secure
+       && c.sameSite==="Strict" && c.path==="/v1/feedhealth/reports/"));
    console.log("ORIGINAL_BUYER_HTTPONLY_COOKIE=PASS");
    await page.waitForTimeout(5000);
    assert.ok(page.frames().some(f=>/paddle/i.test(f.url())),"PADDLE_OVERLAY_NOT_OPENED");
