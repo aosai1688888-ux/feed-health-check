@@ -95,6 +95,7 @@ try:
         run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
             "-keyout", str(root/"key.pem"), "-out", str(root/"cert.pem"),
             "-days", "1", "-subj", "/CN=" + HOST, "-addext", "subjectAltName=DNS:" + HOST)
+        (root/"cert.pem").chmod(0o644)
         (root/"server.py").write_text("""
 import hashlib, json, ssl
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -123,6 +124,17 @@ server.serve_forever()
             "--network-alias", HOST, "-v", str(root)+":/fixture:ro",
             "--entrypoint", "python", PYTHON_IMAGE, "/fixture/server.py")
         containers.append(upstream)
+        # Wait for the actual TLS listener, not merely container creation.
+        probe = ("import socket,ssl; "
+                 "c=ssl.create_default_context(cafile='/fixture/cert.pem'); "
+                 "s=c.wrap_socket(socket.create_connection(('127.0.0.1',443),2),"
+                 "server_hostname='" + HOST + "'); s.close()")
+        for attempt in range(40):
+            if run("docker", "exec", upstream, "python", "-c", probe, ok=False).returncode == 0:
+                break
+            time.sleep(0.25)
+        else:
+            raise AssertionError("fixture TLS listener unavailable: " + run("docker", "logs", upstream).stderr[-500:])
         on = start_site("on", [*gate_env(), "-v",
             str(root/"cert.pem")+":/etc/ssl/certs/ca-certificates.crt:ro"])
         raw = b'{ "event_id" : "CI_FIXTURE_ONLY", "utf8" : "\\u4e7e", "n":1 }\n'

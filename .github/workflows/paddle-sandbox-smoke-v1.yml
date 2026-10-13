@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/paddle-sandbox-smoke-v1.yml'
+      - 'Dockerfile'
+      - 'nginx.conf'
+      - 'feedhealth-proxy.template'
+      - 'scripts/40-feedhealth-transport.sh'
       - 'first-payment.js'
       - 'checkout-config.v1.json'
       - 'scripts/create-paddle-sandbox-config-v1.py'
@@ -70,7 +74,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cp Dockerfile nginx.conf index.html app.js first-payment.js first-payment.css first-payment-offer.v1.json styles.css collector.css privacy.html terms.html contact.html pricing.html refund.html robots.txt sitemap.xml "$STAGE_DIR/"
+          mkdir -p "$STAGE_DIR/scripts"
+          cp scripts/40-feedhealth-transport.sh "$STAGE_DIR/scripts/"
+          cp Dockerfile nginx.conf feedhealth-proxy.template index.html app.js first-payment.js first-payment.css first-payment-offer.v1.json styles.css collector.css privacy.html terms.html contact.html pricing.html refund.html robots.txt sitemap.xml "$STAGE_DIR/"
           # Only the isolated HTTP localhost smoke fixture may read local JSON over http.
           # Never modify the original production CSP to permit insecure origins.
           python3 - "$STAGE_DIR/nginx.conf" "$STAGE_DIR/index.html" <<'PY_CSP'
