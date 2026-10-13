@@ -72,6 +72,9 @@ location = /v1/feedhealth/checkout-intents {
     proxy_set_header CF-Access-Client-Secret "${FEEDHEALTH_ACCESS_CLIENT_SECRET}";
     proxy_set_header Origin $http_origin;
     proxy_set_header Sec-Fetch-Site $http_sec_fetch_site;
+    # Exact original Gateway reservation requires matching checkout_ref header.
+    # This is an ordinary buyer idempotency header, never a payment receipt.
+    proxy_set_header Idempotency-Key $http_idempotency_key;
     
     # Do not pass Authorization, client Access credentials, forwarding/IP claims
     # or payment-proof claims. Cloudflare supplies its own authenticated source IP.
