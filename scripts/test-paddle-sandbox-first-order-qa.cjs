@@ -96,8 +96,29 @@ async function button(page,patterns){
    await page.locator("#diagnosis-delivery-email").fill("feedhealth@qianwuai.com");
    await page.locator("#diagnosis-buyer-consent").check();
    await page.locator("#buy-diagnosis").click();
-   const deadline=Date.now()+40000;
+   const deadline=Date.now()+22000;
    while(!reservation&&Date.now()<deadline)await page.waitForTimeout(350);
+   if(!reservation){
+     const info=await page.evaluate(async()=>({
+       checkoutState:(document.querySelector("#checkout-state")?.textContent||"").slice(0,175),
+       qaRoute:(()=>{try{return sandboxQaFulfillmentReady(
+         {enabled:true,provider:"PADDLE",environment:"sandbox",
+         sandbox_test_purchase_only:true,production_authorization:"DENIED",
+         browser_may_assert_success:false,success_confirmation:"TRUSTED_SERVER_ONLY",
+         currency:"USD",price:49,checkout_url:null,
+         fulfillment_status:"SANDBOX_QA_DELIVERY_UNPROVEN",
+         paddle:{client_side_token:"test_123456789abc",price_id:"pri_"+("a".repeat(26)),
+         product_id:"pro_"+("b".repeat(26))},
+         fulfillment:{mode:"AUTOMATIC_AI_ONLY",status:"SANDBOX_QA_READY",
+         intake_path:"/v1/feedhealth/checkout-intents",
+         report_path:"/v1/feedhealth/reports/read",
+         download_ack_path:"/v1/feedhealth/reports/ack"}})}catch{return "UNAVAILABLE"}})(),
+       evidenceSchema:globalThis.feedHealthBuyerEvidenceSnapshotV1?.()?.schema||"NONE",
+       evidenceCount:globalThis.feedHealthBuyerEvidenceSnapshotV1?.()?.products?.length||0,
+       consent:document.querySelector("#diagnosis-buyer-consent")?.checked===true
+     }));
+     console.log("SANDBOX_ORIGINAL_UI_SAFE_INTAKE_DIAGNOSTIC="+JSON.stringify(info));
+   }
    assert.ok(reservation,"REAL_ORIGINAL_SOR_RESERVATION_NOT_RECEIVED");
    assert.equal(reservation.http,201,"ORIGINAL_SOR_RESERVATION_FAILED");
    assert.equal(reservation.decision,"ACCEPTED");
