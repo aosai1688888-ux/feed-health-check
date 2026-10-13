@@ -198,7 +198,25 @@ async function button(page,patterns){
    // Paddle-published test card; not a real or user payment instrument.
    await input(page,["input[type=email]","input[autocomplete=email]",
      "input[name*=email i]"],"feedhealth@qianwuai.com","EMAIL",false);
-   await button(page,[/continue/i,/next/i]);
+   // Official Paddle Sandbox checkout starts with buyer country/postcode.
+   // Stripe card fields are not rendered until this first step completes.
+   let countrySelected=false;
+   for(const f of page.frames()){
+     const select=f.locator("select[name=countryCode]").first();
+     try{
+       if(await select.count() && await select.isVisible()){
+         await select.selectOption("US",{timeout:5000});
+         countrySelected=true;
+         break;
+       }
+     }catch{}
+   }
+   assert.ok(countrySelected,"PADDLE_SANDBOX_BUYER_COUNTRY_NOT_AVAILABLE");
+   await input(page,["input[name=postcode]","input[autocomplete=postal-code]",
+     "input[name*=zip i]"],"10001","BILLING_POSTCODE",true);
+   assert.ok(await button(page,[/continue/i,/next/i]),"PADDLE_SANDBOX_ADDRESS_STEP_NOT_SUBMITTED");
+   await page.waitForTimeout(2500);
+   await fields(page);
    await input(page,["input[autocomplete=cc-number]","input[name*=card i]",
      "input[placeholder*=card/i]"],"4242424242424242","TEST_CARD",true);
    await input(page,["input[autocomplete=cc-exp]","input[name*=exp i]",
