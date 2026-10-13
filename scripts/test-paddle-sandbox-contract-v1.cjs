@@ -46,6 +46,10 @@ test("sandbox opens fixed one-item one-time price, never asserts payment",async(
   const env=[],init=[],opens=[];
   const paddle={
     Environment:{set:x=>env.push(x)},Initialize:x=>init.push(x),
+    PricePreview:async()=>({data:{currencyCode:"USD",details:{lineItems:[{
+      price:{id:sample().paddle.price_id,productId:sample().paddle.product_id,
+        unitPrice:{currencyCode:"USD",amount:"4900"},billingCycle:null,trialPeriod:null}
+    }]}}}),
     Checkout:{open:x=>opens.push(x)}
   };
   const {c,loads}=setup(paddle);
@@ -245,7 +249,12 @@ test("Live stays blocked without exact GAEC, merchant, webhook and fulfillment a
 test("Only gated Live Paddle.js opens one price; no sandbox environment, tracking or payment claim",async()=>{
   const env=[],initialize=[],opens=[];
   const paddle={Environment:{set:v=>env.push(v)},
-    Initialize:v=>initialize.push(v),Checkout:{open:v=>opens.push(v)}};
+    Initialize:v=>initialize.push(v),
+    PricePreview:async()=>({data:{currencyCode:"USD",details:{lineItems:[{
+      price:{id:liveSample().paddle.price_id,productId:liveSample().paddle.product_id,
+        unitPrice:{currencyCode:"USD",amount:"4900"},billingCycle:null,trialPeriod:null}
+    }]}}}),
+    Checkout:{open:v=>opens.push(v)}};
   const {c}=setup(paddle);
   c.live=liveSample();
   await vm.runInContext('openLivePaddleCheckout(live,"b89a7408-51de-4395-aeed-12bf406c9437")',c);
@@ -261,6 +270,21 @@ test("Only gated Live Paddle.js opens one price; no sandbox environment, trackin
   c.sandbox=sample();
   await assert.rejects(vm.runInContext('openSandboxPaddleCheckout(sandbox,"REF_2")',c),
     /CROSS_ENVIRONMENT_PADDLE_INIT_DENIED/);
+});
+
+test("foreign-currency localized preview is blocked BEFORE a Paddle payment overlay",async()=>{
+  const opened=[];
+  const paddle={Environment:{set(){}},Initialize(){},
+    PricePreview:async()=>({data:{currencyCode:"GBP",details:{lineItems:[{
+      price:{id:liveSample().paddle.price_id,productId:liveSample().paddle.product_id,
+        unitPrice:{currencyCode:"USD",amount:"4900"},billingCycle:null,trialPeriod:null}
+    }]}}}),
+    Checkout:{open:opts=>opened.push(opts)}};
+  const {c}=setup(paddle);
+  c.live=liveSample();
+  await assert.rejects(vm.runInContext('openLivePaddleCheckout(live,"aabbccdd-1234-4abc-8def-123456789000")',c),
+    /PADDLE_PRICE_OR_CURRENCY_NOT_SUPPORTED/);
+  assert.equal(opened.length,0);
 });
 
 console.log("FEEDHEALTH_PADDLE_SANDBOX_CONTRACT=PASS");
