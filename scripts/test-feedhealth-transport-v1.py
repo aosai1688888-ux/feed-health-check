@@ -57,7 +57,7 @@ def start_site(label, extra=()):
     raise AssertionError("test site did not become healthy")
 
 def gate_env(**changes):
-    env = {"FEEDHEALTH_TRANSPORT_ENABLED": "1", "FEEDHEALTH_TRANSPORT_ADMISSION": "GAEC_GO",
+    env = {"FEEDHEALTH_TRANSPORT_ENABLED": "1", "FEEDHEALTH_TRANSPORT_OWNER_RELEASE": "OWNER_APPROVED",
            "FEEDHEALTH_GATEWAY_INGRESS_HOST": HOST, "FEEDHEALTH_ACCESS_CLIENT_ID": CLIENT,
            "FEEDHEALTH_ACCESS_CLIENT_SECRET": SECRET}
     env.update(changes)
@@ -76,7 +76,8 @@ try:
     print("DEFAULT_DISABLED_STATIC_SITE_AND_PRIVATE_PATH_DENIAL=PASS", flush=True)
 
     for changes in [
-        {"FEEDHEALTH_TRANSPORT_ADMISSION": "HOLD"},
+        {"FEEDHEALTH_TRANSPORT_OWNER_RELEASE": "HOLD"},
+        {"FEEDHEALTH_TRANSPORT_OWNER_RELEASE": ""},
         {"FEEDHEALTH_GATEWAY_INGRESS_HOST": "feed.qianwuai.com"},
         {"FEEDHEALTH_GATEWAY_INGRESS_HOST": "127.0.0.1"},
         {"FEEDHEALTH_GATEWAY_INGRESS_HOST": "attacker.example"},
