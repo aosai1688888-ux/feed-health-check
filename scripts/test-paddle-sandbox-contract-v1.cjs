@@ -78,7 +78,8 @@ test("buyer checkout registration fails closed unless evidence, consent and trus
   const {c}=setup();
   c.config=sample();
   c.config.fulfillment={mode:"AUTOMATIC_AI_ONLY",status:"VERIFIED_READY",
-                        intake_path:"/v1/feedhealth/checkout-intents"};
+                        intake_path:"/v1/feedhealth/checkout-intents",
+                        download_ack_path:"/v1/feedhealth/reports/ack"};
   c.ref="b89a7408-51de-4395-aeed-12bf406c9437";
   c.feedHealthBuyerEvidenceSnapshotV1=()=>({
     schema:"feedhealth.buyer_evidence_snapshot.v1",source_kind:"BUYER_SUPPLIED_JSON",
@@ -216,7 +217,8 @@ function liveSample(){
   config.fulfillment={
     mode:"AUTOMATIC_AI_ONLY",status:"VERIFIED_READY",
     intake_path:"/v1/feedhealth/checkout-intents",
-    report_path:"/v1/feedhealth/reports/read"
+    report_path:"/v1/feedhealth/reports/read",
+    download_ack_path:"/v1/feedhealth/reports/ack"
   };
   config.paddle.client_side_token="live_"+"0123456789abcdef";
   config.paddle.currency_localization_disabled=true;
@@ -239,7 +241,8 @@ test("Live stays blocked without exact GAEC, merchant, webhook and fulfillment a
   }
   for(const [key,val] of [
     ["status","NOT_VERIFIED"],["mode","MANUAL"],
-    ["intake_path","https://evil.invalid/data"],["report_path","/wrong/report"]]){
+    ["intake_path","https://evil.invalid/data"],["report_path","/wrong/report"],
+    ["download_ack_path","https://untrusted.invalid/ack"]]){
       const bad=liveSample();bad.fulfillment[key]=val;
       assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(bad)+")",c),false,key);
   }
@@ -297,6 +300,43 @@ test("foreign-currency localized preview is blocked BEFORE a Paddle payment over
   await assert.rejects(vm.runInContext('openLivePaddleCheckout(live,"aabbccdd-1234-4abc-8def-123456789000")',c),
     /PADDLE_PRICE_OR_CURRENCY_NOT_SUPPORTED/);
   assert.equal(opened.length,0);
+});
+
+test("browser buyer download click requires original signed report and idempotent Group SoR receipt",async()=>{
+  const {c}=setup();
+  const receipt={schema:"feedhealth.authorized_report_delivery.v1",
+    checkout_ref:"b89a7408-51de-4395-aeed-12bf406c9437",
+    report_sha256:"c".repeat(64),delivery_mode:"AUTHORIZED_BUYER_PULL"};
+  c.receipt=receipt;
+  let calls=0;
+  c.fetch=async(path,options)=>{
+    calls++;
+    assert.equal(path,"/v1/feedhealth/reports/ack");
+    assert.equal(options.method,"POST");
+    assert.equal(options.credentials,"same-origin");
+    assert.equal(options.redirect,"error");
+    assert.equal(options.cache,"no-store");
+    assert.deepEqual(JSON.parse(options.body),{
+      checkout_ref:receipt.checkout_ref,report_sha256:receipt.report_sha256});
+    return {status:200,json:async()=>({
+      schema:"feedhealth.buyer_download_ack.v1",decision:"RECORDED",
+      checkout_ref:receipt.checkout_ref,report_sha256:receipt.report_sha256,
+      buyer_download_acknowledged:true})};
+  };
+  const ack=()=>vm.runInContext("acknowledgeAuthorizedBuyerDownload(receipt)",c);
+  assert.equal((await ack()).decision,"RECORDED");
+  assert.equal(calls,1);
+  c.receipt={...receipt,schema:"not-signed"};
+  await assert.rejects(ack(),/BUYER_DOWNLOAD_ACK_NOT_AUTHORIZED/);
+  assert.equal(calls,1);
+  c.receipt=receipt;
+  c.fetch=async()=>({status:404});
+  await assert.rejects(ack(),/BUYER_DOWNLOAD_ACK_SERVER_UNAVAILABLE/);
+  c.fetch=async()=>({status:200,json:async()=>({
+    schema:"feedhealth.buyer_download_ack.v1",decision:"RECORDED",
+    checkout_ref:"other-order",report_sha256:receipt.report_sha256,
+    buyer_download_acknowledged:true})});
+  await assert.rejects(ack(),/BUYER_DOWNLOAD_ACK_RECEIPT_INVALID/);
 });
 
 console.log("FEEDHEALTH_PADDLE_SANDBOX_CONTRACT=PASS");
