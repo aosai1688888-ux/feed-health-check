@@ -349,7 +349,8 @@ test("Sandbox config generation remains preview-only until trusted delivery expl
   const env={...process.env,
     FEEDHEALTH_PADDLE_SANDBOX_CLIENT_TOKEN:"test_"+"0".repeat(22),
     FEEDHEALTH_PADDLE_SANDBOX_PRICE_ID:"pri_"+"a".repeat(26),
-    FEEDHEALTH_PADDLE_SANDBOX_PRODUCT_ID:"pro_"+"b".repeat(26)};
+    FEEDHEALTH_PADDLE_SANDBOX_PRODUCT_ID:"pro_"+"b".repeat(26),
+    FEEDHEALTH_SANDBOX_QA_ADMITTED:"NO"};
   const generator=path.join(root,"scripts","create-paddle-sandbox-config-v1.py");
   const run=extra=>cp.spawnSync("python3",[generator,"--output",dest],
     {env:{...env,...extra},encoding:"utf8"});
@@ -361,7 +362,17 @@ test("Sandbox config generation remains preview-only until trusted delivery expl
     assert.equal(Object.hasOwn(limited,"fulfillment"),false);
     const rejected=run({FEEDHEALTH_SANDBOX_DELIVERY_VERIFIED:"MAYBE"});
     assert.notEqual(rejected.status,0);
-    const ready=run({FEEDHEALTH_SANDBOX_DELIVERY_VERIFIED:"YES"});
+    const qa=run({FEEDHEALTH_SANDBOX_QA_ADMITTED:"YES",FEEDHEALTH_SANDBOX_DELIVERY_VERIFIED:"NO"});
+    assert.equal(qa.status,0,qa.stderr);
+    const qaConfig=JSON.parse(fs.readFileSync(dest,"utf8"));
+    assert.equal(qaConfig.status,"SANDBOX_QA_TRANSACTION_TEST_ONLY");
+    assert.equal(qaConfig.fulfillment_status,"SANDBOX_QA_DELIVERY_UNPROVEN");
+    assert.equal(qaConfig.fulfillment.status,"SANDBOX_QA_READY");
+    assert.equal(qaConfig.production_authorization,"DENIED");
+    assert.equal(qaConfig.environment,"sandbox");
+    const overlap=run({FEEDHEALTH_SANDBOX_QA_ADMITTED:"YES",FEEDHEALTH_SANDBOX_DELIVERY_VERIFIED:"YES"});
+    assert.notEqual(overlap.status,0);
+    const ready=run({FEEDHEALTH_SANDBOX_DELIVERY_VERIFIED:"YES",FEEDHEALTH_SANDBOX_QA_ADMITTED:"NO"});
     assert.equal(ready.status,0,ready.stderr);
     const verified=JSON.parse(fs.readFileSync(dest,"utf8"));
     assert.equal(verified.environment,"sandbox");
@@ -375,9 +386,41 @@ test("Sandbox config generation remains preview-only until trusted delivery expl
   } finally {fs.rmSync(dir,{recursive:true,force:true})}
 });
 
+test("Sandbox QA mode admits test checkout but cannot become Live payment authority",async()=>{
+  const {c}=setup();
+  c.config=sample();
+  c.config.production_authorization="DENIED";
+  c.config.fulfillment_status="SANDBOX_QA_DELIVERY_UNPROVEN";
+  c.config.fulfillment={
+    mode:"AUTOMATIC_AI_ONLY",status:"SANDBOX_QA_READY",
+    intake_path:"/v1/feedhealth/checkout-intents",
+    report_path:"/v1/feedhealth/reports/read",
+    download_ack_path:"/v1/feedhealth/reports/ack"
+  };
+  assert.equal(vm.runInContext("sandboxQaFulfillmentReady(config)",c),true);
+  assert.equal(vm.runInContext("isLivePaddleCheckout(config)",c),false);
+  c.ref="b89a7408-51de-4395-aeed-12bf406c9437";
+  c.feedHealthBuyerEvidenceSnapshotV1=()=>({
+    schema:"feedhealth.buyer_evidence_snapshot.v1",source_kind:"BUYER_SUPPLIED_JSON",
+    products:[{id:"fixture"}]
+  });
+  c.fetch=async(_path,_options)=>({status:201,json:async()=>({
+    schema:"feedhealth.checkout_intent_receipt.v1",
+    decision:"ACCEPTED",checkout_ref:c.ref,
+    ai_delivery_authorized_after_verified_payment:true,
+    session_mode:"HTTP_ONLY_COOKIE"
+  })});
+  const receipt=await vm.runInContext(
+    'reservePaidDiagnosisBeforeCheckout(config,ref,"buyer@example.com",true)',c);
+  assert.equal(receipt.checkout_ref,c.ref);
+  c.config.environment="production";
+  assert.equal(vm.runInContext("sandboxQaFulfillmentReady(config)",c),false);
+  assert.equal(vm.runInContext("isLivePaddleCheckout(config)",c),false);
+});
+
 test("buyer paid-report recovery is outside hidden scan results and requires server session",()=>{
   assert.match(source,/results\.parentNode\?\.insertBefore\(recovery, results\)/);
-  assert.match(source,/checkout\?\.fulfillment\?\.status === "VERIFIED_READY"/);
+  assert.match(source,/fulfillmentReadyForAuthorizedBuyer\(checkout\) && results/);
   assert.match(source,/recovery\.append\(explanation, recoveryButton, recoveryStatus, reportHost\)/);
   assert.match(source,/session_mode:"HTTP_ONLY_COOKIE"/);
   assert.ok(!source.includes("localStorage"));
