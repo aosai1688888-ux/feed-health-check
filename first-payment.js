@@ -459,7 +459,10 @@ function renderOffer(panel, offer, checkout) {
     authorizedReportSession={schema:"feedhealth.client_report_session.v1",
       session_mode:"HTTP_ONLY_COOKIE"};
     void pollSignedPaymentAndReport(checkout).catch(() => {
-      const status=document.getElementById("checkout-state");
+      const results=document.getElementById("results");
+      const status=results?.hidden
+        ? (document.getElementById("buyer-report-recovery-state") || document.getElementById("checkout-state"))
+        : document.getElementById("checkout-state");
       if(status) status.textContent="No authorized report could be retrieved for this browser session.";
     });
   });
