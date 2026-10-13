@@ -66,7 +66,30 @@ async function button(page,patterns){
      body:JSON.stringify(cfg)
    }));
    let reservation=null;
+   const networkTrace=[];
+   const browserErrors=[];
+   page.on("request",request=>{
+     try{
+       const u=new URL(request.url());
+       if(u.origin===origin && u.pathname.startsWith("/v1/feedhealth/"))
+         networkTrace.push({phase:"REQUEST",method:request.method(),path:u.pathname});
+     }catch{}
+   });
+   page.on("requestfailed",request=>{
+     try{
+       const u=new URL(request.url());
+       if(u.origin===origin && u.pathname.startsWith("/v1/feedhealth/"))
+         networkTrace.push({phase:"FAILED",path:u.pathname,failure:request.failure()?.slice(0,90)});
+     }catch{}
+   });
+   page.on("pageerror",error=>browserErrors.push(error.name||"PageError"));
    page.on("response",async response=>{
+     try{
+       const u=new URL(response.url());
+       if(u.origin===origin && u.pathname.startsWith("/v1/feedhealth/"))
+         networkTrace.push({phase:"RESPONSE",path:u.pathname,status:response.status()});
+     }catch{}
+
      if(response.url()!==origin+"/v1/feedhealth/checkout-intents")return;
      try{
        const j=await response.json();
@@ -117,7 +140,30 @@ async function button(page,patterns){
        evidenceCount:globalThis.feedHealthBuyerEvidenceSnapshotV1?.()?.products?.length||0,
        consent:document.querySelector("#diagnosis-buyer-consent")?.checked===true
      }));
+     const actual=await page.evaluate(async()=>{
+       const c=await fetch("/checkout-config.v1.json",{cache:"no-store"}).then(r=>r.json());
+       const x=globalThis.feedHealthBuyerEvidenceSnapshotV1?.();
+       const email=document.querySelector("#diagnosis-delivery-email")?.value||"";
+       const consent=document.querySelector("#diagnosis-buyer-consent")?.checked===true;
+       return {
+         sandbox:isSandboxPaddleCheckout(c),
+         qa:sandboxQaFulfillmentReady(c),
+         ready:fulfillmentReadyForAuthorizedBuyer(c),
+         consent,validEmail:/^[^\\s@]{1,64}@[^\\s@]{1,190}\\.[A-Za-z]{2,40}$/.test(email),
+         evidenceOk:!!x && x.schema==="feedhealth.buyer_evidence_snapshot.v1"
+           && Array.isArray(x.products)&&x.products.length>0&&x.products.length<=50,
+         mode:c.fulfillment?.mode||null,
+         intake:c.fulfillment?.intake_path||null,
+         downloadAck:c.fulfillment?.download_ack_path||null,
+         testOnly:c.sandbox_test_purchase_only,
+         provider:c.provider,
+         stage:c.fulfillment?.status
+       };
+     });
      console.log("SANDBOX_ORIGINAL_UI_SAFE_INTAKE_DIAGNOSTIC="+JSON.stringify(info));
+     console.log("SANDBOX_ACTUAL_CONFIG_GATE="+JSON.stringify(actual));
+     console.log("SANDBOX_ORIGINAL_INTAKE_NETWORK="+JSON.stringify(networkTrace));
+     console.log("SANDBOX_BROWSER_ERROR_CLASSES="+JSON.stringify(browserErrors));
    }
    assert.ok(reservation,"REAL_ORIGINAL_SOR_RESERVATION_NOT_RECEIVED");
    assert.equal(reservation.http,201,"ORIGINAL_SOR_RESERVATION_FAILED");
