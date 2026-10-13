@@ -124,6 +124,23 @@ function isLivePaddleCheckout(config) {
     && /^pro_[a-z0-9]{20,40}$/.test(settings.product_id || ""));
 }
 
+// Sandbox test-card QA is not a Live delivery certificate. The server still
+// requires signed Paddle payment before the AI job can be claimed.
+function sandboxQaFulfillmentReady(config) {
+  return isSandboxPaddleCheckout(config)
+    && config.production_authorization === "DENIED"
+    && config.fulfillment_status === "SANDBOX_QA_DELIVERY_UNPROVEN"
+    && config.fulfillment?.mode === "AUTOMATIC_AI_ONLY"
+    && config.fulfillment?.status === "SANDBOX_QA_READY"
+    && config.fulfillment?.intake_path === "/v1/feedhealth/checkout-intents"
+    && config.fulfillment?.report_path === "/v1/feedhealth/reports/read"
+    && config.fulfillment?.download_ack_path === "/v1/feedhealth/reports/ack";
+}
+function fulfillmentReadyForAuthorizedBuyer(config) {
+  return config?.fulfillment?.status === "VERIFIED_READY"
+    || sandboxQaFulfillmentReady(config);
+}
+
 let sandboxPaddleLoad;
 function loadSandboxPaddle() {
   if (globalThis.Paddle) return Promise.resolve(globalThis.Paddle);
@@ -148,7 +165,7 @@ async function reservePaidDiagnosisBeforeCheckout(config, checkoutRef, email, co
       || !/^[^\s@]{1,64}@[^\s@]{1,190}\.[A-Za-z]{2,40}$/.test(email)
       || typeof checkoutRef !== "string" || !/^[0-9a-f-]{20,80}$/i.test(checkoutRef)
       || config?.fulfillment?.mode !== "AUTOMATIC_AI_ONLY"
-      || config?.fulfillment?.status !== "VERIFIED_READY"
+      || !fulfillmentReadyForAuthorizedBuyer(config)
       || config?.fulfillment?.intake_path !== "/v1/feedhealth/checkout-intents"
       || config?.fulfillment?.download_ack_path !== "/v1/feedhealth/reports/ack"
       || !(isSandboxPaddleCheckout(config) || isLivePaddleCheckout(config))) {
@@ -199,7 +216,7 @@ const REPORT_MAX_CHECKS = 36;
 
 async function requestSignedPaidReport(config, session) {
   if (!config?.fulfillment
-      || config.fulfillment.status !== "VERIFIED_READY"
+      || !fulfillmentReadyForAuthorizedBuyer(config)
       || config.fulfillment.report_path !== "/v1/feedhealth/reports/read"
       || !session || session.schema !== "feedhealth.client_report_session.v1"
       || (session.checkout_ref !== undefined && !/^[0-9a-f-]{36}$/i.test(session.checkout_ref))
@@ -440,7 +457,7 @@ function renderOffer(panel, offer, checkout) {
       <button id="buy-diagnosis" class="button primary" type="button">Get Verified Diagnosis — ${money(currency, price)}</button>
       <a class="button secondary" href="mailto:feedhealth@qianwuai.com?subject=Feed%20Health%20question">Ask a question</a>
     </div>
-    ${checkout?.fulfillment?.status==="VERIFIED_READY" ? '<button id="resume-report" class="button ghost" type="button">Retrieve an existing paid report on this device</button>' : ""}
+    ${fulfillmentReadyForAuthorizedBuyer(checkout) ? '<button id="resume-report" class="button ghost" type="button">Retrieve an existing paid report on this device</button>' : ""}
     <div id="feedhealth-paid-report" role="region" aria-label="Verified paid diagnosis report" hidden></div>
     <p id="checkout-state" class="intent-message" role="status" aria-live="polite">${sandboxReady ? "Paddle Sandbox test only — no real charge, automatic report fulfillment not yet verified." : (liveReady ? "Live checkout is release-gated; server verification and valid buyer evidence are required before payment." : "Candidate build: secure checkout is intentionally fail-closed until a trusted payment provider is bound.")}</p>
     <p class="offer-footnote">No store changes are made by this purchase. No guarantee of approval, ranking, traffic, ROAS, or sales is made.</p>
@@ -550,7 +567,7 @@ async function initializeFirstPayment() {
   // Recover a report after refresh without requiring another product scan.
   // Only the original server's HttpOnly cookie authorizes report retrieval.
   const results = document.getElementById("results");
-  if (checkout?.fulfillment?.status === "VERIFIED_READY" && results) {
+  if (fulfillmentReadyForAuthorizedBuyer(checkout) && results) {
     const recoveryButton = document.getElementById("resume-report");
     const reportHost = document.getElementById("feedhealth-paid-report");
     if (recoveryButton && reportHost) {
