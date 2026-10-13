@@ -16,9 +16,10 @@ case "${FEEDHEALTH_TRANSPORT_ENABLED:-0}" in
     1) ;;
     *) echo 'FeedHealth transport: invalid mode' >&2; exit 1 ;;
 esac
-# This is an operator-supplied gate, not an independent approval generator.
-[ "${FEEDHEALTH_TRANSPORT_ADMISSION:-}" = "GAEC_GO" ] || {
-    echo 'FeedHealth transport: independent admission missing' >&2; exit 1;
+# Single-owner release requires explicit activation in addition to scoped TLS and Access credentials.
+# This is NOT evidence of provider approval, customer payment or completed delivery.
+[ "${FEEDHEALTH_TRANSPORT_OWNER_RELEASE:-}" = "OWNER_APPROVED" ] || {
+    echo 'FeedHealth transport: owner release not approved' >&2; exit 1;
 }
 host="${FEEDHEALTH_GATEWAY_INGRESS_HOST:-}"
 case "$host" in
