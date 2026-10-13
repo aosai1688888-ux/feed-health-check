@@ -95,14 +95,14 @@ function isSandboxPaddleCheckout(config) {
 }
 
 // A live checkout remains denied unless a separate exact-SHA release has been
-// independently admitted, Paddle Live business/domain verification is complete,
+// explicitly owner-authorized, Paddle Live business/domain verification is complete,
 // and the original same-origin paid-AI intake/receipt/report chain is READY.
 // Public client flags are NOT a payment authority: Group SoR and Paddle's
 // signed provider event remain authoritative for any actual fulfillment.
 function isLivePaddleCheckout(config) {
   if (!config || config.enabled !== true || config.provider !== "PADDLE"
       || config.environment !== "production" || config.sandbox_test_purchase_only !== false
-      || config.production_authorization !== "GAEC_GO"
+      || config.production_authorization !== "OWNER_APPROVED"
       || config.merchant_verified !== true || config.checkout_domain_approved !== true
       || config.public_signed_webhook_verified !== true
       || config.browser_may_assert_success !== false
@@ -394,7 +394,7 @@ function renderOffer(panel, offer, checkout) {
       <div>
         <p class="eyebrow">STEP 03 · VERIFIED DIAGNOSIS</p>
         <h3 id="cta-title">Turn this public scan into a verified repair decision.</h3>
-        <p class="offer-lede">The free scan is a public observation. The planned paid diagnosis uses AI to analyze buyer-provided product data, label evidence strength, and automatically generate a prioritized digital report. ${liveReady ? "Paid AI delivery is enabled for independently admitted production transactions only." : "Paid delivery is not live yet."}</p>
+        <p class="offer-lede">The free scan is a public observation. The planned paid diagnosis uses AI to analyze buyer-provided product data, label evidence strength, and automatically generate a prioritized digital report. ${liveReady ? "Paid AI delivery is available only for owner-authorized, provider-verified production transactions." : "Paid delivery is not live yet."}</p>
       </div>
       <div class="offer-price" aria-label="Verified Feed Diagnosis price">
         <span>One-time</span>
