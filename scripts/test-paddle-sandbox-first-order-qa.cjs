@@ -149,7 +149,7 @@ async function button(page,patterns){
          sandbox:isSandboxPaddleCheckout(c),
          qa:sandboxQaFulfillmentReady(c),
          ready:fulfillmentReadyForAuthorizedBuyer(c),
-         consent,validEmail:/^[^\\s@]{1,64}@[^\\s@]{1,190}\\.[A-Za-z]{2,40}$/.test(email),
+         consent,validEmail:/^[^\s@]{1,64}@[^\s@]{1,190}\.[A-Za-z]{2,40}$/.test(email),
          evidenceOk:!!x && x.schema==="feedhealth.buyer_evidence_snapshot.v1"
            && Array.isArray(x.products)&&x.products.length>0&&x.products.length<=50,
          mode:c.fulfillment?.mode||null,
