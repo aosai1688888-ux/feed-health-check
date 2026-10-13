@@ -339,4 +339,48 @@ test("browser buyer download click requires original signed report and idempoten
   await assert.rejects(ack(),/BUYER_DOWNLOAD_ACK_RECEIPT_INVALID/);
 });
 
+
+test("Sandbox config generation remains preview-only until trusted delivery explicitly verified",()=>{
+  const cp=require("node:child_process");
+  const fs=require("node:fs");
+  const os=require("node:os");
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"feedhealth-sandbox-config-"));
+  const dest=path.join(dir,"checkout-config.v1.json");
+  const env={...process.env,
+    FEEDHEALTH_PADDLE_SANDBOX_CLIENT_TOKEN:"test_"+"0".repeat(22),
+    FEEDHEALTH_PADDLE_SANDBOX_PRICE_ID:"pri_"+"a".repeat(26),
+    FEEDHEALTH_PADDLE_SANDBOX_PRODUCT_ID:"pro_"+"b".repeat(26)};
+  const generator=path.join(root,"scripts","create-paddle-sandbox-config-v1.py");
+  const run=extra=>cp.spawnSync("python3",[generator,"--output",dest],
+    {env:{...env,...extra},encoding:"utf8"});
+  try {
+    const preview=run({FEEDHEALTH_SANDBOX_DELIVERY_VERIFIED:"NO"});
+    assert.equal(preview.status,0,preview.stderr);
+    const limited=JSON.parse(fs.readFileSync(dest,"utf8"));
+    assert.equal(limited.fulfillment_status,"NOT_VERIFIED");
+    assert.equal(Object.hasOwn(limited,"fulfillment"),false);
+    const rejected=run({FEEDHEALTH_SANDBOX_DELIVERY_VERIFIED:"MAYBE"});
+    assert.notEqual(rejected.status,0);
+    const ready=run({FEEDHEALTH_SANDBOX_DELIVERY_VERIFIED:"YES"});
+    assert.equal(ready.status,0,ready.stderr);
+    const verified=JSON.parse(fs.readFileSync(dest,"utf8"));
+    assert.equal(verified.environment,"sandbox");
+    assert.equal(verified.production_authorization,"DENIED");
+    assert.equal(verified.fulfillment.status,"VERIFIED_READY");
+    assert.equal(verified.fulfillment.intake_path,"/v1/feedhealth/checkout-intents");
+    assert.equal(verified.fulfillment.report_path,"/v1/feedhealth/reports/read");
+    assert.equal(verified.fulfillment.download_ack_path,"/v1/feedhealth/reports/ack");
+    assert.equal(production.enabled,false);
+    assert.equal(production.provider,"UNBOUND");
+  } finally {fs.rmSync(dir,{recursive:true,force:true})}
+});
+
+test("buyer paid-report recovery is outside hidden scan results and requires server session",()=>{
+  assert.match(source,/results\.parentNode\?\.insertBefore\(recovery, results\)/);
+  assert.match(source,/checkout\?\.fulfillment\?\.status === "VERIFIED_READY"/);
+  assert.match(source,/recovery\.append\(explanation, recoveryButton, recoveryStatus, reportHost\)/);
+  assert.match(source,/session_mode:"HTTP_ONLY_COOKIE"/);
+  assert.ok(!source.includes("localStorage"));
+});
+
 console.log("FEEDHEALTH_PADDLE_SANDBOX_CONTRACT=PASS");
