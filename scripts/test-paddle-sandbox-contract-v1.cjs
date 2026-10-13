@@ -181,6 +181,10 @@ test("only original server-signed payment and bound report allow browser deliver
 test("browser checkout completed event only wakes server verification",async()=>{
   const initialized=[];
   const paddle={Environment:{set(){}},Initialize:x=>initialized.push(x),
+    PricePreview:async()=>({data:{currencyCode:"USD",details:{lineItems:[{
+      price:{id:sample().paddle.price_id,productId:sample().paddle.product_id,
+        unitPrice:{currencyCode:"USD",amount:"4900"},billingCycle:null,trialPeriod:null}
+    }]}}}),
     Checkout:{open(){} }};
   const {c}=setup(paddle);
   c.config=sample();
