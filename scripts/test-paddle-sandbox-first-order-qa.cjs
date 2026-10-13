@@ -303,8 +303,11 @@ async function button(page,patterns){
      "input[placeholder*=name/i]"],"FeedHealth Test","CARD_NAME",false);
    await input(page,["input[autocomplete=postal-code]","input[name*=zip i]"],
      "10001","POSTAL",false);
-   assert.ok(await button(page,[/pay now/i,/complete purchase/i,
-     /pay.*49/i,/complete payment/i,/purchase/i]),"TEST_CARD_SUBMIT_NOT_FOUND");
+   // Paddle may include jurisdictional tax in its final official Sandbox pay label.
+   // This only locates the provider button; server-signed payment validation remains authoritative.
+   assert.ok(await button(page,[/^pay\s+\$\d+(?:\.\d{2})?$/i,
+     /pay now/i,/complete purchase/i,/complete payment/i,
+     /purchase/i]),"TEST_CARD_SUBMIT_NOT_FOUND");
    console.log("PADDLE_SANDBOX_TEST_CARD_SUBMITTED=TRUE");
    let delivered=false;
    const end=Date.now()+210000;
