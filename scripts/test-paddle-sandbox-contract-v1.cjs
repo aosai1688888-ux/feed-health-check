@@ -210,7 +210,7 @@ function liveSample(){
   const config=sample();
   config.environment="production";
   config.sandbox_test_purchase_only=false;
-  config.production_authorization="GAEC_GO";
+  config.production_authorization="OWNER_APPROVED";
   config.merchant_verified=true;
   config.checkout_domain_approved=true;
   config.public_signed_webhook_verified=true;
@@ -226,12 +226,12 @@ function liveSample(){
   return config;
 }
 
-test("Live stays blocked without exact GAEC, merchant, webhook and fulfillment admission",()=>{
+test("Live stays blocked without owner release, merchant, webhook and fulfillment readiness",()=>{
   const {c}=setup();
   assert.equal(vm.runInContext("isLivePaddleCheckout("+JSON.stringify(production)+")",c),false);
   for(const [key,val] of [
     ["environment","sandbox"],["sandbox_test_purchase_only",true],
-    ["production_authorization","DENIED"],["merchant_verified",false],
+    ["production_authorization","DENIED"],["production_authorization","GAEC_GO"],["merchant_verified",false],
     ["checkout_domain_approved",false],["public_signed_webhook_verified",false],
     ["enabled",false],["provider","UNBOUND"],["price",50],
     ["browser_may_assert_success",true],["success_confirmation","BROWSER"],
