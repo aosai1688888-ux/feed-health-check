@@ -305,7 +305,7 @@ async function button(page,patterns){
      "10001","POSTAL",false);
    // Paddle may include jurisdictional tax in its final official Sandbox pay label.
    // This only locates the provider button; server-signed payment validation remains authoritative.
-   assert.ok(await button(page,[/^pay\\s+\\$\\d+(?:\\.\\d{2})?$/i,
+   assert.ok(await button(page,[/^pay\s+\$\d+(?:\.\d{2})?$/i,
      /pay now/i,/complete purchase/i,/complete payment/i,
      /purchase/i]),"TEST_CARD_SUBMIT_NOT_FOUND");
    console.log("PADDLE_SANDBOX_TEST_CARD_SUBMITTED=TRUE");
