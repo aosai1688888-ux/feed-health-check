@@ -1,6 +1,7 @@
 # Exact public transport allowlist; all financial truth remains in original Group SoR.
 location = /webhooks/paddle {
-    access_log off;
+    # Emit only failed upstream status/timing; never log URLs, headers, body, IP or secrets.
+    access_log /dev/stdout feedhealth_transport_failure if=$feedhealth_transport_failure_only;
     error_log /dev/stderr crit;
     if ($request_method != POST) { return 405; }
     if ($args != "") { return 400; }
@@ -46,7 +47,8 @@ location = /webhooks/paddle {
     proxy_hide_header Set-Cookie;
 }
 location = /v1/feedhealth/checkout-intents {
-    access_log off;
+    # Emit only failed upstream status/timing; never log URLs, headers, body, IP or secrets.
+    access_log /dev/stdout feedhealth_transport_failure if=$feedhealth_transport_failure_only;
     error_log /dev/stderr crit;
     if ($request_method != POST) { return 405; }
     if ($args != "") { return 400; }
@@ -97,7 +99,8 @@ location = /v1/feedhealth/checkout-intents {
     
 }
 location = /v1/feedhealth/reports/read {
-    access_log off;
+    # Emit only failed upstream status/timing; never log URLs, headers, body, IP or secrets.
+    access_log /dev/stdout feedhealth_transport_failure if=$feedhealth_transport_failure_only;
     error_log /dev/stderr crit;
     if ($request_method != POST) { return 405; }
     if ($args != "") { return 400; }
@@ -145,7 +148,8 @@ location = /v1/feedhealth/reports/read {
     proxy_hide_header Set-Cookie;
 }
 location = /v1/feedhealth/reports/ack {
-    access_log off;
+    # Emit only failed upstream status/timing; never log URLs, headers, body, IP or secrets.
+    access_log /dev/stdout feedhealth_transport_failure if=$feedhealth_transport_failure_only;
     error_log /dev/stderr crit;
     if ($request_method != POST) { return 405; }
     if ($args != "") { return 400; }
