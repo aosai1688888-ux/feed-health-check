@@ -11,7 +11,7 @@ location = /webhooks/paddle {
     client_body_buffer_size 512k;
     client_body_timeout 10s;
     proxy_http_version 1.1;
-    proxy_pass https://${FEEDHEALTH_GATEWAY_INGRESS_HOST}/webhooks/paddle;
+    proxy_pass https://feedhealth_gateway_edge/webhooks/paddle;
     proxy_ssl_server_name on;
     proxy_ssl_name ${FEEDHEALTH_GATEWAY_INGRESS_HOST};
     proxy_ssl_verify on;
@@ -59,7 +59,7 @@ location = /v1/feedhealth/checkout-intents {
     client_body_buffer_size 135000;
     client_body_timeout 10s;
     proxy_http_version 1.1;
-    proxy_pass https://${FEEDHEALTH_GATEWAY_INGRESS_HOST}/v1/feedhealth/checkout-intents;
+    proxy_pass https://feedhealth_gateway_edge/v1/feedhealth/checkout-intents;
     proxy_ssl_server_name on;
     proxy_ssl_name ${FEEDHEALTH_GATEWAY_INGRESS_HOST};
     proxy_ssl_verify on;
@@ -111,7 +111,7 @@ location = /v1/feedhealth/reports/read {
     client_body_buffer_size 135000;
     client_body_timeout 10s;
     proxy_http_version 1.1;
-    proxy_pass https://${FEEDHEALTH_GATEWAY_INGRESS_HOST}/v1/feedhealth/reports/read;
+    proxy_pass https://feedhealth_gateway_edge/v1/feedhealth/reports/read;
     proxy_ssl_server_name on;
     proxy_ssl_name ${FEEDHEALTH_GATEWAY_INGRESS_HOST};
     proxy_ssl_verify on;
@@ -160,7 +160,7 @@ location = /v1/feedhealth/reports/ack {
     client_body_buffer_size 135000;
     client_body_timeout 10s;
     proxy_http_version 1.1;
-    proxy_pass https://${FEEDHEALTH_GATEWAY_INGRESS_HOST}/v1/feedhealth/reports/ack;
+    proxy_pass https://feedhealth_gateway_edge/v1/feedhealth/reports/ack;
     proxy_ssl_server_name on;
     proxy_ssl_name ${FEEDHEALTH_GATEWAY_INGRESS_HOST};
     proxy_ssl_verify on;
