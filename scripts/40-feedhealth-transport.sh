@@ -3,9 +3,11 @@
 set -eu
 umask 077
 output=/etc/nginx/feedhealth-locations.conf
+upstream=/etc/nginx/conf.d/00-feedhealth-upstream.conf
 template=/etc/nginx/feedhealth-proxy.template
 disabled() {
     : > "$output"
+    : > "$upstream"
     for route in /webhooks/paddle /v1/feedhealth/checkout-intents /v1/feedhealth/reports/read /v1/feedhealth/reports/ack; do
         printf 'location = %s { access_log off; return 503; }\n' "$route" >> "$output"
     done
@@ -37,6 +39,10 @@ for value in "${FEEDHEALTH_ACCESS_CLIENT_ID:-}" "${FEEDHEALTH_ACCESS_CLIENT_SECR
         echo 'FeedHealth transport: invalid scoped credential length' >&2; exit 1;
     }
 done
+# Keep exactly one guarded TLS upstream without passive "no live upstreams" suppression.
+# No retry is enabled: payment POSTs are still single-attempt and Group SoR-verified.
+printf "upstream feedhealth_gateway_edge { server %s:443 max_fails=0; }\n" "$host" > "$upstream"
+chmod 600 "$upstream"
 export FEEDHEALTH_GATEWAY_INGRESS_HOST FEEDHEALTH_ACCESS_CLIENT_ID FEEDHEALTH_ACCESS_CLIENT_SECRET
 # Only these three variables are substituted. Nginx request variables survive.
 envsubst '${FEEDHEALTH_GATEWAY_INGRESS_HOST} ${FEEDHEALTH_ACCESS_CLIENT_ID} ${FEEDHEALTH_ACCESS_CLIENT_SECRET}' < "$template" > "$output"

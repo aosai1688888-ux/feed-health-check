@@ -29,4 +29,15 @@ assert "proxy_set_header CF-Access-Client-Id" in intake
 assert "proxy_set_header Origin $http_origin;" in intake
 assert "proxy_set_header Sec-Fetch-Site $http_sec_fetch_site;" in intake
 assert "proxy_set_header Authorization" not in intake
+# Intermittent 502 regression: preserve a single, non-retrying checkout/webhook
+# route while disabling Nginx's passive upstream quarantine after one failure.
+transport = src("scripts/40-feedhealth-transport.sh")
+assert '00-feedhealth-upstream.conf' in transport
+assert 'server %s:443 max_fails=0;' in transport
+assert 'chmod 600 "$upstream"' in transport
+assert ': > "$upstream"' in transport  # absent when fail-closed
+assert proxy.count('proxy_pass https://feedhealth_gateway_edge/') == 4
+assert proxy.count('proxy_next_upstream off;') == 4
+assert 'proxy_pass https://'+chr(36)+'{FEEDHEALTH_GATEWAY_INGRESS_HOST}/' not in proxy
+assert proxy.count('proxy_ssl_name '+chr(36)+'{FEEDHEALTH_GATEWAY_INGRESS_HOST};') == 4
 print("FEED_RAILWAY_SITE_CONTRACT=PASS")
